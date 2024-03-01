@@ -1,0 +1,9 @@
+[package]
+name = "hfile"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clearscreen = "2.0.1"
+colored = "2.1.0"
+rand = "0.8.5"
