@@ -1,4 +1,5 @@
 use crate::{File, FILES, Path, PATHS, Uid};
+use crate::print::ColumnKind;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -50,35 +51,30 @@ fn get_path_by_file(file: &File) -> Option<String> {
     }
 }
 
-#[derive(Clone, Copy)]
-pub enum SortBy {
-    Name,
-    Size,
-    TotalSize,
-    Modified,
-    FileType,
-    FileExt,
-}
-
-pub fn sort_files(files: &mut Vec<&File>, sort_by: SortBy, reverse: bool) {
+pub fn sort_files(files: &mut Vec<&File>, sort_by: ColumnKind, reverse: bool) {
     match sort_by {
-        SortBy::Name => {
+        ColumnKind::Index => unreachable!(),
+        ColumnKind::Name => {
             files.sort_by_key(|file| &file.name);
         },
-        SortBy::Size => {
+        ColumnKind::Size => {
             files.sort_by_key(|file| file.size);
         },
-        SortBy::TotalSize => {
+        ColumnKind::TotalSize => {
             files.sort_by_key(|file| file.get_recursive_size());
         },
-        SortBy::Modified => {
+        ColumnKind::Modified => {
             files.sort_by_key(|file| file.last_modified);
         },
-        SortBy::FileType => {
+        ColumnKind::FileType => {
             files.sort_by_key(|file| file.file_type);
         },
-        SortBy::FileExt => {
+        ColumnKind::FileExt => {
             files.sort_by_key(|file| file.file_ext.clone().unwrap_or(String::new()));
         },
+    }
+
+    if reverse {
+        files.reverse();
     }
 }

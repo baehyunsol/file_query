@@ -26,11 +26,16 @@ fn main() {
     }
 
     if is_interactive_mode {
-        // clearscreen::clear().unwrap();
+        clearscreen::clear().unwrap();
     }
 
-    let mut curr_dir_uid = Uid::BASE;
-    print_dir(curr_dir_uid, PrintDirConfig::default());
+    let mut print_dir_config = PrintDirConfig::default();
+    let mut print_file_config = PrintFileConfig::default();
+
+    let mut curr_uid = Uid::BASE;
+
+    // Uid::BASE must point to a directory
+    print_dir(curr_uid, &print_dir_config);
 
     unsafe { IS_MASTER_WORKING = false; }
 
@@ -43,23 +48,39 @@ fn main() {
             io::stdin().read_line(&mut buffer).unwrap();
             buffer = buffer.strip_suffix("\n").unwrap().to_string();
 
-            if buffer == ".." && curr_dir_uid != Uid::ROOT {
-                let curr_dir = get_file_by_uid(curr_dir_uid).unwrap();
-                curr_dir_uid = curr_dir.get_parent_uid();
+            if buffer == ".." && curr_uid != Uid::ROOT {
+                let curr_dir = get_file_by_uid(curr_uid).unwrap();
+                curr_uid = curr_dir.get_parent_uid();
             }
 
             else {
-                for child in get_file_by_uid(curr_dir_uid).unwrap().get_children(true) {
+                for child in get_file_by_uid(curr_uid).unwrap().get_children(true) {
                     if child.name == buffer {
-                        curr_dir_uid = child.uid;
+                        curr_uid = child.uid;
                     }
                 }
             }
 
-            // clearscreen::clear().unwrap();
+            clearscreen::clear().unwrap();
 
             unsafe { IS_MASTER_WORKING = true; }
-            print_dir(curr_dir_uid, PrintDirConfig::default());
+
+            match get_file_by_uid(curr_uid) {
+                Some(f) => match f.file_type {
+                    FileType::Dir => {
+                        print_dir(curr_uid, &print_dir_config);
+                    },
+                    FileType::File => {
+                        print_file(curr_uid, &print_file_config);
+                    },
+                    FileType::Symlink => {
+                        print_link(curr_uid);
+                    },
+                },
+                None => {
+                    // TODO: what do I do here?
+                },
+            }
             unsafe { IS_MASTER_WORKING = false; }
         }
     }

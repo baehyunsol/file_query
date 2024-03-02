@@ -6,4 +6,6 @@ edition = "2021"
 [dependencies]
 clearscreen = "2.0.1"
 colored = "2.1.0"
+lazy_static = "1.4.0"
 rand = "0.8.5"
+syntect = "5.2.0"

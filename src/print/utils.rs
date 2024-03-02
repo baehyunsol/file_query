@@ -1,7 +1,7 @@
 use colored::Color;
 use crate::colors;
 use crate::file::FileType;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 // the result must be right-aligned
 pub fn prettify_size(size: u64) -> String {
@@ -120,5 +120,50 @@ pub fn colorize_time(now: &SystemTime, time: SystemTime) -> Color {
 
     else {
         colors::RED
+    }
+}
+
+pub fn try_extract_utf8_text(content: &[u8]) -> Option<String> {
+    if content.len() < 6 {
+        String::from_utf8(content.to_vec()).ok()
+    }
+
+    else if let Ok(s) = String::from_utf8(content.to_vec()) {
+        Some(s)
+    }
+
+    else if let Ok(s) = String::from_utf8(content[..(content.len() - 1)].to_vec()) {
+        Some(s)
+    }
+
+    else if let Ok(s) = String::from_utf8(content[..(content.len() - 2)].to_vec()) {
+        Some(s)
+    }
+
+    // a valid utf-8 char uses at most 4 bytes
+    else if let Ok(s) = String::from_utf8(content[..(content.len() - 3)].to_vec()) {
+        Some(s)
+    }
+
+    else {
+        None
+    }
+}
+
+pub fn format_duration(duration: Duration) -> String {
+    let secs = duration.as_secs();
+
+    if secs == 0 {
+        format!("{} µs", duration.subsec_micros())
+    }
+
+    else if secs < 10 {
+        let millis = duration.subsec_millis();
+
+        format!("{secs}.{millis:03} seconds")
+    }
+
+    else {
+        format!("{secs} seconds")
     }
 }

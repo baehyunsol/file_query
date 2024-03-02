@@ -331,7 +331,7 @@ impl File {
         }
 
         else {
-            let mut child_iter = self.children.as_ref().unwrap().iter().map(
+            let child_iter = self.children.as_ref().unwrap().iter().map(
                 |child| get_file_by_uid(*child).unwrap() as &File
             );
 

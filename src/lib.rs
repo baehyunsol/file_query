@@ -1,3 +1,5 @@
+#![deny(unused_imports)]
+
 use std::collections::HashMap;
 
 mod colors;
@@ -6,8 +8,14 @@ mod print;
 mod uid;
 mod utils;
 
-pub use file::File;
-pub use print::{print_dir, PrintDirConfig};
+pub use file::{File, FileType};
+pub use print::{
+    print_dir,
+    print_file,
+    print_link,
+    PrintDirConfig,
+    PrintFileConfig,
+};
 pub use uid::Uid;
 pub use utils::get_file_by_uid;
 
