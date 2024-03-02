@@ -252,8 +252,8 @@ pub fn print_dir(
 
     let table_column_widths = calc_table_column_widths(
         &table_contents,
-        Some(config.table_max_width),
-        Some(config.table_min_width),
+        Some(config.max_width),
+        Some(config.min_width),
         COLUMN_MARGIN,
     );
     let curr_table_width = {
@@ -346,13 +346,13 @@ pub fn print_file(
             let mut truncated = 0;
 
             match fs::File::open(&path) {
-                Ok(mut f) => if f_i.size <= 1048576 {
+                Ok(mut f) => if f_i.size <= 65536 {
                     if let Err(e) = f.read_to_end(&mut content) {
                         println!("{e:?}");
                         return;
                     }
                 } else {
-                    let mut buffer = [0u8; 1048576];
+                    let mut buffer = [0u8; 65536];
 
                     if let Err(e) = f.read_exact(&mut buffer) {
                         println!("{e:?}");
@@ -432,7 +432,8 @@ pub fn print_file(
                             }
 
                             else {
-                                curr_line_chars.push(ch);
+                                // tmp hack: it cannot render '\r' characters properly
+                                curr_line_chars.push(if ch == '\r' { ' ' } else { ch });
                                 curr_line_colors.push(Color::TrueColor {
                                     r: style.foreground.r,
                                     g: style.foreground.g,
@@ -461,7 +462,6 @@ pub fn print_file(
                     }
                 }
 
-                // ... (truncated {n} row{})
                 if truncated > 0 {
                     lines.push(vec![format!("... (truncated {})", prettify_size(truncated).trim())]);
                     alignments.push(vec![Alignment::Left]);
@@ -828,12 +828,12 @@ fn calc_table_column_widths(
         assert!(t >= m);
     }
 
-    let mut max_column_widths = table_contents[0].iter().map(|c| c.len()).collect::<Vec<_>>();
+    let mut max_column_widths = table_contents[0].iter().map(|c| c.chars().count()).collect::<Vec<_>>();
     let mut col_counts = HashSet::new();
     col_counts.insert(table_contents[0].len());
 
     for row in table_contents[1..].iter() {
-        let curr_row_widths = row.iter().map(|c| c.len()).collect::<Vec<_>>();
+        let curr_row_widths = row.iter().map(|c| c.chars().count()).collect::<Vec<_>>();
         col_counts.insert(row.len());
 
         if curr_row_widths.len() == max_column_widths.len() {

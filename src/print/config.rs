@@ -1,4 +1,5 @@
 use super::Alignment;
+use terminal_size::{self as ts, terminal_size};
 
 #[derive(Clone, Copy)]
 pub enum ColumnKind {
@@ -55,8 +56,8 @@ pub struct PrintDirConfig {
     pub sort_reverse: bool,
     pub show_full_path: bool,
     pub show_hidden_files: bool,
-    pub table_max_width: usize,
-    pub table_min_width: usize,
+    pub max_width: usize,
+    pub min_width: usize,
 
     // columns[0] MUST BE ColumnKind::Index
     // columns[1] MUST BE ColumnKind::Name
@@ -65,6 +66,16 @@ pub struct PrintDirConfig {
 }
 
 impl PrintDirConfig {
+    pub fn adjust_output_dimension(&mut self) {
+        if let Some((ts::Width(w), ts::Height(h))) = terminal_size() {
+            let w = w as usize;
+            let h = h as usize;
+            self.max_width = w;
+            self.min_width = w >> 2;
+            self.max_row = h.max(24).min(84) - 4;
+        }
+    }
+
     pub fn into_sql_string(&self) -> String {
         format!(
             "SELECT {} FROM cwd{} ORDER BY {}{} LIMIT {};",
@@ -85,8 +96,8 @@ impl Default for PrintDirConfig {
             sort_reverse: false,
             show_full_path: false,
             show_hidden_files: false,
-            table_max_width: 120,
-            table_min_width: 64,
+            max_width: 120,
+            min_width: 64,
             columns: vec![
                 ColumnKind::Index,
                 ColumnKind::Name,
@@ -114,6 +125,18 @@ impl Default for PrintFileConfig {
             max_width: 120,
             min_width: 64,
             line_offset: 0,
+        }
+    }
+}
+
+impl PrintFileConfig {
+    pub fn adjust_output_dimension(&mut self) {
+        if let Some((ts::Width(w), ts::Height(h))) = terminal_size() {
+            let w = w as usize;
+            let h = h as usize;
+            self.max_width = w;
+            self.min_width = w >> 2;
+            self.max_row = h.max(24).min(84) - 4;
         }
     }
 }

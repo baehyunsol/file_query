@@ -32,6 +32,9 @@ fn main() {
     let mut print_dir_config = PrintDirConfig::default();
     let mut print_file_config = PrintFileConfig::default();
 
+    print_dir_config.adjust_output_dimension();
+    print_file_config.adjust_output_dimension();
+
     let mut curr_uid = Uid::BASE;
 
     // Uid::BASE must point to a directory
@@ -60,6 +63,9 @@ fn main() {
                     }
                 }
             }
+
+            print_dir_config.adjust_output_dimension();
+            print_file_config.adjust_output_dimension();
 
             clearscreen::clear().unwrap();
 
