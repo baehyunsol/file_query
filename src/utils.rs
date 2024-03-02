@@ -54,6 +54,7 @@ fn get_path_by_file(file: &File) -> Option<String> {
 pub enum SortBy {
     Name,
     Size,
+    TotalSize,
     Modified,
     FileType,
     FileExt,
@@ -66,6 +67,9 @@ pub fn sort_files(files: &mut Vec<&File>, sort_by: SortBy, reverse: bool) {
         },
         SortBy::Size => {
             files.sort_by_key(|file| file.size);
+        },
+        SortBy::TotalSize => {
+            files.sort_by_key(|file| file.get_recursive_size());
         },
         SortBy::Modified => {
             files.sort_by_key(|file| file.last_modified);

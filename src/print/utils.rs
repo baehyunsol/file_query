@@ -31,42 +31,48 @@ pub fn prettify_time(now: &SystemTime, time: SystemTime) -> String {
     let secs = duration.as_secs();
 
     if secs < 5 {
-        String::from("just now     ")
+        String::from("just now   ")
     }
 
     else if secs <= 99 {
-        format!("{} seconds ago  ", secs)
+        format!("{} seconds ago", secs)
     }
 
     else if secs <= 60 * 60 {
-        format!("{} minutes ago  ", secs / 60)
+        format!("{} minutes ago", secs / 60)
     }
 
     else if secs <= 24 * 60 * 60 {
-        format!("{} hours ago    ", secs / 3600)
+        format!("{} hours ago  ", secs / 3600)
     }
 
     else if secs <= 99 * 60 * 60 * 24 {
-        format!("{} days ago     ", secs / 86400)
+        format!("{} days ago   ", secs / 86400)
     }
 
     else if secs <= 99 * 60 * 60 * 24 * 7 {
-        format!("{} weeks ago    ", secs / 604800)
+        format!("{} weeks ago  ", secs / 604800)
     }
 
     // an average month is 2629746 seconds
     // it's okay to use the average value because the duration is long enough (at least 25 months)
     else if secs <= 99 * 2629746 {
-        format!("{} months ago   ", secs / 2629746)
+        format!("{} months ago ", secs / 2629746)
     }
 
     // an average year
-    else if secs <= 99 * 31556952 {
-        format!("{} years ago    ", secs / 31556952)
+    else {
+        format!("{} years ago  ", secs / 31556952)
+    }
+}
+
+pub fn colorize_name(_: FileType, is_executable: bool) -> Color {
+    if is_executable {
+        colors::YELLOW
     }
 
     else {
-        format!("{} centuries ago", secs / 3155695200)
+        colors::WHITE
     }
 }
 

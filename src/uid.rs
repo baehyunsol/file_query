@@ -20,6 +20,10 @@ impl Uid {
         Uid((0x2 << 124) | n as u128)
     }
 
+    pub fn message() -> Self {
+        Uid(rand::random::<u128>() & !(0xf << 124) | (0x3 << 124))
+    }
+
     pub fn is_special(&self) -> bool {
         (self.0 >> 124) != 0
     }
@@ -32,6 +36,10 @@ impl Uid {
 
             else if self.0 >> 124 == 0x2 {
                 format!("Uid::truncated_rows({})", self.0 & !(0xf << 124))
+            }
+
+            else if self.0 >> 124 == 0x3 {
+                format!("Uid::message({})", self.0 & !(0xf << 124))
             }
 
             else {

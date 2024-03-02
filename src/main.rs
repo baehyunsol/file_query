@@ -41,10 +41,19 @@ fn main() {
         loop {
             let mut buffer = String::new();
             io::stdin().read_line(&mut buffer).unwrap();
+            buffer = buffer.strip_suffix("\n").unwrap().to_string();
 
-            if buffer == "..\n" {
+            if buffer == ".." && curr_dir_uid != Uid::ROOT {
                 let curr_dir = get_file_by_uid(curr_dir_uid).unwrap();
                 curr_dir_uid = curr_dir.get_parent_uid();
+            }
+
+            else {
+                for child in get_file_by_uid(curr_dir_uid).unwrap().get_children(true) {
+                    if child.name == buffer {
+                        curr_dir_uid = child.uid;
+                    }
+                }
             }
 
             // clearscreen::clear().unwrap();

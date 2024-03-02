@@ -16,8 +16,9 @@ mod utils;
 
 const COLUMN_MARGIN: usize = 2;
 
-pub use config::PrintDirConfig;
+pub use config::{ColumnKind, PrintDirConfig};
 use utils::{
+    colorize_name,
     colorize_size,
     colorize_time,
     colorize_type,
@@ -82,6 +83,14 @@ pub fn print_dir(
                 nested_levels.push(0);
             }
 
+            if children_num == 0 {
+                children_instances.push(
+                    // very ugly, but there's no other way than this to fool the borrow checker
+                    get_file_by_uid(File::message_from_string(String::from("Empty Directory"))).unwrap() as &File
+                );
+                nested_levels.push(0);
+            }
+
             debug_assert_eq!(
                 children_instances.len(),
                 nested_levels.len(),
@@ -92,13 +101,7 @@ pub fn print_dir(
             let mut content_colors = vec![];
 
             // column names
-            table_contents.push(vec![
-                "index".to_string(),
-                "name".to_string(),
-                "type".to_string(),
-                "modified".to_string(),
-                "size".to_string(),
-            ]);
+            table_contents.push(config.columns.iter().map(|col| col.header_string()).collect::<Vec<_>>());
             column_alignments.push(vec![Alignment::Center; table_contents[0].len()]);
             content_colors.push(vec![colors::WHITE; table_contents[0].len()]);
 
@@ -165,32 +168,54 @@ pub fn print_dir(
                     child.name.clone()
                 };
 
-                table_contents.push(vec![
-                    table_index_formatted,
-                    name,
-                    child.file_type.to_string(),
-                    prettify_time(&now, child.last_modified),
-                    prettify_size(child.size),
-                ]);
-                column_alignments.push(vec![
-                    Alignment::Right,  // index
-                    Alignment::Left,   // name
-                    Alignment::Left,   // file type
-                    Alignment::Right,  // last modified
-                    Alignment::Right,  // size
-                ]);
-                content_colors.push(vec![
-                    colors::WHITE,
-                    colors::WHITE,
-                    colorize_type(child.file_type),
-                    colorize_time(&now, child.last_modified),
-                    colorize_size(child.size),
-                ]);
+                let mut curr_table_contents = vec![];
+                let mut curr_column_alignments = vec![];
+                let mut curr_content_colors = vec![];
+
+                for column in config.columns.iter() {
+                    match column {
+                        ColumnKind::Index => {
+                            curr_table_contents.push(table_index_formatted.clone());
+                            curr_content_colors.push(colors::WHITE);
+                        },
+                        ColumnKind::Name => {
+                            curr_table_contents.push(name.clone());
+                            curr_content_colors.push(colorize_name(child.file_type, child.is_executable));
+                        },
+                        ColumnKind::Size => {
+                            curr_table_contents.push(prettify_size(child.size));
+                            curr_content_colors.push(colorize_size(child.size));
+                        },
+                        ColumnKind::TotalSize => {
+                            curr_table_contents.push(prettify_size(child.get_recursive_size()));
+                            curr_content_colors.push(colorize_size(child.get_recursive_size()));
+                        },
+                        ColumnKind::Modified => {
+                            curr_table_contents.push(prettify_time(&now, child.last_modified));
+                            curr_content_colors.push(colorize_time(&now, child.last_modified));
+                        },
+                        ColumnKind::FileType => {
+                            curr_table_contents.push(child.file_type.to_string());
+                            curr_content_colors.push(colorize_type(child.file_type));
+                        },
+                        ColumnKind::FileExt => {
+                            curr_table_contents.push(child.file_ext.clone().unwrap_or(String::new()));
+                            curr_content_colors.push(colors::WHITE);
+                        },
+                    }
+
+                    curr_column_alignments.push(column.alignment());
+                }
+
+                table_contents.push(curr_table_contents);
+                column_alignments.push(curr_column_alignments);
+                content_colors.push(curr_content_colors);
             }
 
             let table_column_widths = calc_table_column_widths(
                 &table_contents,
-                Some(config.table_width),
+                Some(config.table_max_width),
+                Some(config.table_min_width),
                 COLUMN_MARGIN,
             );
             let curr_table_width = {
@@ -227,6 +252,7 @@ pub fn print_dir(
                 ],
                 COLUMN_MARGIN,
                 (true, true),
+                false,  // color arrows
             );
 
             print_horizontal_line(
@@ -248,6 +274,7 @@ pub fn print_dir(
                     &content_colors[index],
                     COLUMN_MARGIN,
                     (true, true),
+                    true,  // color arrows
                 );
             }
 
@@ -264,7 +291,10 @@ pub fn print_dir(
     }
 }
 
-pub fn print_file(uid: Uid) {}
+pub fn print_file(uid: Uid) {
+    // TODO...
+    // how about embedding `bat` and `viu` here?
+}
 
 fn add_nested_contents<'a>(
     contents: Vec<&'a File>,
@@ -343,8 +373,6 @@ fn add_nested_contents<'a>(
     )
 }
 
-// TODO: colorize '├──'
-// for that, I have to make sure that the file names never contain non-ascii chars
 fn print_row(
     background: Color,
     contents: &Vec<String>,
@@ -353,6 +381,7 @@ fn print_row(
     colors: &Vec<Color>,
     margin: usize,
     borders: (bool, bool),  // (left, right)
+    color_arrows: bool,
 ) {
     debug_assert_eq!(contents.len(), widths.len());
     debug_assert_eq!(contents.len(), alignments.len());
@@ -374,6 +403,7 @@ fn print_row(
 
     for i in 0..contents.len() {
         let curr_content_len = contents[i].chars().count();
+        let mut parts = vec![];
 
         if curr_content_len <= widths[i] {
             let left_margin = match alignments[i] {
@@ -383,14 +413,21 @@ fn print_row(
             };
             let right_margin = widths[i] - curr_content_len - left_margin;
 
-            let line = format!(
-                "{}{}{}",
-                " ".repeat(left_margin),
-                contents[i].color(colors[i]),
-                " ".repeat(right_margin),
-            );
+            parts.push(" ".repeat(left_margin).color(colors[i]));
 
-            print!("{}", line.on_color(background));
+            // TODO: if it's level-2 or more, an arrow might start with a whitespace
+            // TODO: what if a file name starts with "├"?
+            if color_arrows && (contents[i].starts_with("├") || contents[i].starts_with("╰")) {
+                // TODO: it has to be fixed when level-2 contents are implemented
+                parts.push(contents[i].get(..9).unwrap().color(colors::GREEN));
+                parts.push(contents[i].get(9..).unwrap().color(colors[i]));
+            }
+
+            else {
+                parts.push(contents[i].color(colors[i]));
+            }
+
+            parts.push(" ".repeat(right_margin).color(colors[i]));
         }
 
         else {
@@ -398,13 +435,25 @@ fn print_row(
             let first_half = (widths[i] - 3) >> 1;
             let last_half = widths[i] - 3 - first_half;
 
-            let line = format!(
-                "{}...{}",
-                contents[i].chars().collect::<Vec<_>>()[..first_half].iter().collect::<String>().color(colors[i]),
-                contents[i].chars().collect::<Vec<_>>()[(curr_content_len - last_half)..].iter().collect::<String>().color(colors[i]),
-            );
+            let prefix = contents[i].chars().collect::<Vec<_>>()[..first_half].iter().collect::<String>();
 
-            print!("{}", line.on_color(background));
+            if color_arrows && (prefix.starts_with("├") || prefix.starts_with("╰")) {
+                parts.push(prefix.get(..9).unwrap().color(colors::GREEN));
+                parts.push(prefix.get(9..).unwrap().color(colors[i]));
+            }
+
+            else {
+                parts.push(prefix.color(colors[i]));
+            }
+
+            parts.push(String::from("...").color(colors[i]));
+
+            let suffix = contents[i].chars().collect::<Vec<_>>()[(curr_content_len - last_half)..].iter().collect::<String>();
+            parts.push(suffix.color(colors[i]));
+        }
+
+        for part in parts.into_iter() {
+            print!("{}", part.on_color(background));
         }
 
         print!(
@@ -487,11 +536,17 @@ fn print_horizontal_line(
 // 3. If a row has N columns (N < M), the last column has rowspan (M - N + 1), and the other columns have rowspan 1.
 fn calc_table_column_widths(
     table_contents: &Vec<Vec<String>>,
-    total_width: Option<usize>,
+    max_width: Option<usize>,
+    min_width: Option<usize>,
     column_margin: usize,
 ) -> HashMap<usize, Vec<usize>> {
+    if let (Some(t), Some(m)) = (max_width, min_width) {
+        assert!(t >= m);
+    }
+
     let mut max_column_widths = table_contents[0].iter().map(|c| c.len()).collect::<Vec<_>>();
     let mut col_counts = HashSet::new();
+    col_counts.insert(table_contents[0].len());
 
     for row in table_contents[1..].iter() {
         let curr_row_widths = row.iter().map(|c| c.len()).collect::<Vec<_>>();
@@ -512,18 +567,37 @@ fn calc_table_column_widths(
 
     let mut max_total_width = max_column_widths.iter().sum::<usize>() + column_margin * (max_column_widths.len() + 1);
 
-    if let Some(width) = total_width {
+    if let Some(width) = max_width {
         if width < max_total_width {
             let mut diff = max_total_width - width;
 
-            // TODO: it might loop forever
             while diff > 0 {
+                let mut did_something = false;
+
                 for w in max_column_widths.iter_mut() {
                     if *w > 16 && diff > 0 {
                         *w -= 1;
                         diff -= 1;
+                        did_something = true;
                     }
                 }
+
+                // I'd rather break the ui than showing too small columns
+                if !did_something {
+                    break;
+                }
+            }
+
+            max_total_width = max_column_widths.iter().sum::<usize>() + column_margin * (max_column_widths.len() + 1);
+        }
+    }
+
+    if let Some(width) = min_width {
+        if width > max_total_width {
+            let d = (width - max_total_width) / max_column_widths.len() + 1;
+
+            for w in max_column_widths.iter_mut() {
+                *w += d;
             }
 
             max_total_width = max_column_widths.iter().sum::<usize>() + column_margin * (max_column_widths.len() + 1);

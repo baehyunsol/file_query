@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum FileType {
     File,
@@ -38,6 +41,9 @@ pub struct File {
     pub file_type: FileType,
     pub file_ext: Option<String>,
     pub children: Option<Vec<Uid>>,
+
+    // TODO: it's always `false` on windows
+    pub is_executable: bool,
 }
 
 impl File {
@@ -55,23 +61,34 @@ impl File {
                 return File::from_error_msg(String::new());
             },
         };
-        let (last_modified, size) = match path.metadata() {
-            Ok(metadata) => match metadata.modified() {
-                Ok(last_modified) => (last_modified, metadata.len()),
-                Err(e) => {
-                    return File::from_io_error(e);
-                },
-            }
+        let (last_modified, size, file_type, is_executable) = match path.metadata() {
+            Ok(metadata) => {
+                let file_type = if metadata.is_symlink() {
+                    FileType::Symlink
+                } else if metadata.is_dir() {
+                    FileType::Dir
+                } else {
+                    FileType::File
+                };
+                let size = metadata.len();
+                let last_modified = match metadata.modified() {
+                    Ok(last_modified) => last_modified,
+                    Err(e) => {
+                        return File::from_io_error(e);
+                    },
+                };
+
+                #[cfg(unix)]
+                let is_executable = metadata.permissions().mode() & 0o111 != 0 && file_type == FileType::File;
+
+                #[cfg(not(unix))]
+                let is_executable = false;
+
+                (last_modified, size, file_type, is_executable)
+            },
             Err(e) => {
                 return File::from_io_error(e);
             },
-        };
-        let file_type = if path.is_symlink() {
-            FileType::Symlink
-        } else if path.is_dir() {
-            FileType::Dir
-        } else {
-            FileType::File
         };
         let file_ext = match path.extension() {
             Some(ext) => match ext.to_str() {
@@ -91,6 +108,7 @@ impl File {
             file_type,
             file_ext,
             children: None,
+            is_executable,
         };
 
         let result_uid = result.uid;
@@ -113,7 +131,7 @@ impl File {
 
     // it registers the instance to the cache, and only returns its uid
     pub fn new_from_dir_entry(dir_entry: fs::DirEntry, parent: Option<Uid>) -> Uid {
-        let (last_modified, size, file_type) = match dir_entry.metadata() {
+        let (last_modified, size, file_type, is_executable) = match dir_entry.metadata() {
             Ok(metadata) => {
                 let file_type = if metadata.is_symlink() {
                     FileType::Symlink
@@ -129,8 +147,14 @@ impl File {
                         return File::from_io_error(e);
                     },
                 };
-    
-                (last_modified, size, file_type)
+
+                #[cfg(unix)]
+                let is_executable = metadata.permissions().mode() & 0o111 != 0 && file_type == FileType::File;
+
+                #[cfg(not(unix))]
+                let is_executable = false;
+
+                (last_modified, size, file_type, is_executable)
             },
             Err(e) => {
                 return File::from_io_error(e);
@@ -160,6 +184,7 @@ impl File {
             file_type,
             file_ext,
             children: None,
+            is_executable,
         };
 
         let result_uid = result.uid;
@@ -180,7 +205,6 @@ impl File {
         let uid = Uid::error();
 
         let result = File {
-            parent: None,
             uid,
             name: message,
             ..File::dummy()
@@ -202,9 +226,23 @@ impl File {
         let uid = Uid::error();
 
         let result = File {
-            parent: None,
             uid,
             name: message,
+            ..File::dummy()
+        };
+
+        let files = unsafe { FILES.as_mut().unwrap() };
+        files.insert(uid, result);
+
+        uid
+    }
+
+    pub fn message_from_string(msg: String) -> Uid {
+        let uid = Uid::message();
+
+        let result = File {
+            name: msg,
+            uid,
             ..File::dummy()
         };
 
@@ -224,7 +262,6 @@ impl File {
         }
 
         let result = File {
-            parent: None,
             uid,
             name: format!(
                 "... (truncated {n} row{})",
@@ -406,6 +443,7 @@ impl File {
             file_type: FileType::File,
             file_ext: None,
             children: None,
+            is_executable: false,
         }
     }
 
