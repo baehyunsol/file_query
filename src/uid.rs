@@ -4,6 +4,7 @@ pub struct Uid(u128);
 
 impl Uid {
     pub const BASE: Self = Uid(0);
+    pub const ROOT: Self = Uid(1);
 }
 
 impl Uid {
@@ -21,5 +22,25 @@ impl Uid {
 
     pub fn is_special(&self) -> bool {
         (self.0 >> 124) != 0
+    }
+
+    pub fn debug_info(&self) -> String {
+        if self.is_special() {
+            if self.0 >> 124 == 0x1 {
+                format!("Uid::error({})", self.0 & !(0xf << 124))
+            }
+
+            else if self.0 >> 124 == 0x2 {
+                format!("Uid::truncated_rows({})", self.0 & !(0xf << 124))
+            }
+
+            else {
+                unreachable!()
+            }
+        }
+
+        else {
+            format!("Uid::normal_file({})", self.0)
+        }
     }
 }

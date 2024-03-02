@@ -8,7 +8,7 @@ use crate::utils::{
     sort_files,
     SortBy,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
 
 mod config;
@@ -47,34 +47,6 @@ pub fn print_dir(
             let children_num = children_instances.len();
             let curr_dir_path = get_path_by_uid(uid).unwrap();
 
-            // print curr dir
-            print_row(
-                colors::BLACK,
-                vec![
-                    curr_dir_path,
-                    &format!("{} elements", children_num),
-                ],
-                &vec![  // TODO: make it configurable (according to the size of the term)
-                    64,
-                    18,  // num of elements
-                ],
-                &vec![
-                    Alignment::Left,   // path
-                    Alignment::Left,   // num of elements
-                ],
-                &vec![
-                    colors::WHITE,  // path
-                    colors::BLUE,   // num of elements
-                ],
-                COLUMN_MARGIN,
-                Some(config.table_width),
-            );
-
-            print_horizontal_line(
-                None,  // background
-                config.table_width,
-            );
-
             sort_files(&mut children_instances, config.sort_by, config.sort_reverse);
 
             // it shows contents inside dirs (if there are enough rows)
@@ -99,37 +71,6 @@ pub fn print_dir(
             }
 
             let now = SystemTime::now();
-            let column_widths = vec![
-                if config.max_row < 100 { 5 } else { 8 },   // index
-                32,  // name
-                6,   // file type
-                18,  // last modified
-                9,   // size
-            ];
-            let column_alignments = vec![
-                Alignment::Right,  // index
-                Alignment::Left,   // name
-                Alignment::Left,   // file type
-                Alignment::Right,  // last modified
-                Alignment::Right,  // size
-            ];
-
-            // column names
-            print_row(
-                colors::GRAY,
-                vec![
-                    "index",
-                    "name",
-                    "type",
-                    "modified",
-                    "size",
-                ],
-                &column_widths,
-                &vec![Alignment::Center; column_widths.len()],
-                &vec![colors::WHITE; column_widths.len()],
-                COLUMN_MARGIN,
-                Some(config.table_width),
-            );
 
             let truncated_rows = children_num - nested_levels.iter().filter(|level| **level == 0).count();
 
@@ -146,11 +87,25 @@ pub fn print_dir(
                 nested_levels.len(),
             );
 
+            let mut table_contents = vec![];
+            let mut column_alignments = vec![];
+            let mut content_colors = vec![];
+
+            // column names
+            table_contents.push(vec![
+                "index".to_string(),
+                "name".to_string(),
+                "type".to_string(),
+                "modified".to_string(),
+                "size".to_string(),
+            ]);
+            column_alignments.push(vec![Alignment::Center; table_contents[0].len()]);
+            content_colors.push(vec![colors::WHITE; table_contents[0].len()]);
+
             let mut table_index = 0;
             let mut table_sub_index = 0;
 
             for (index, child) in children_instances.iter().enumerate() {
-                let background = if index & 1 == 1 { colors::GRAY } else { colors::BLACK };
                 let nested_level = nested_levels[index];
                 let has_to_use_half_arrow = nested_level > 0 && (index == nested_levels.len() - 1 || nested_levels[index + 1] < nested_level);
 
@@ -160,22 +115,18 @@ pub fn print_dir(
                         has_to_use_half_arrow,
                         &child.name,
                     );
-
-                    print_row(
-                        background,
-                        vec![
-                            "",  // index
-                            &message,
-                        ],
-                        &vec![
-                            column_widths[0],
-                            column_widths[1..].iter().sum::<usize>(),
-                        ],
-                        &vec![Alignment::Right, Alignment::Left],
-                        &vec![colors::WHITE; 2],
-                        COLUMN_MARGIN,
-                        Some(config.table_width),
-                    );
+                    table_contents.push(vec![
+                        String::new(),  // index
+                        message,
+                    ]);
+                    column_alignments.push(vec![
+                        Alignment::Right,
+                        Alignment::Left,
+                    ]);
+                    content_colors.push(vec![
+                        colors::WHITE,
+                        colors::WHITE,
+                    ]);
 
                     continue;
                 }
@@ -214,28 +165,98 @@ pub fn print_dir(
                     child.name.clone()
                 };
 
+                table_contents.push(vec![
+                    table_index_formatted,
+                    name,
+                    child.file_type.to_string(),
+                    prettify_time(&now, child.last_modified),
+                    prettify_size(child.size),
+                ]);
+                column_alignments.push(vec![
+                    Alignment::Right,  // index
+                    Alignment::Left,   // name
+                    Alignment::Left,   // file type
+                    Alignment::Right,  // last modified
+                    Alignment::Right,  // size
+                ]);
+                content_colors.push(vec![
+                    colors::WHITE,
+                    colors::WHITE,
+                    colorize_type(child.file_type),
+                    colorize_time(&now, child.last_modified),
+                    colorize_size(child.size),
+                ]);
+            }
+
+            let table_column_widths = calc_table_column_widths(
+                &table_contents,
+                Some(config.table_width),
+                COLUMN_MARGIN,
+            );
+            let curr_table_width = {
+                let (cols, widths) = table_column_widths.iter().next().unwrap();
+
+                widths.iter().sum::<usize>() + COLUMN_MARGIN * (*cols + 1)
+            };
+
+            print_horizontal_line(
+                None,  // background
+                curr_table_width,
+                (true, false),   // (is top, is bottom)
+                (true, true),    // (left border, right border)
+            );
+
+            // print curr dir
+            print_row(
+                colors::BLACK,
+                &vec![
+                    curr_dir_path.to_string(),
+                    format!("{} elements", children_num),
+                ],
+                &vec![
+                    curr_table_width - 13 - COLUMN_MARGIN * 3,
+                    13,
+                ],
+                &vec![
+                    Alignment::Left,   // path
+                    Alignment::Left,   // num of elements
+                ],
+                &vec![
+                    colors::WHITE,  // path
+                    colors::YELLOW,  // num of elements
+                ],
+                COLUMN_MARGIN,
+                (true, true),
+            );
+
+            print_horizontal_line(
+                None,  // background
+                curr_table_width,
+                (false, false),  // (is top, is bottom)
+                (true, true),    // (left border, right border)
+            );
+
+            for index in 0..table_contents.len() {
+                let background = if index & 1 == 1 { colors::GRAY } else { colors::BLACK };
+                let column_widths = table_column_widths.get(&table_contents[index].len()).unwrap();
+
                 print_row(
                     background,
-                    vec![
-                        &table_index_formatted,
-                        &name,
-                        &child.file_type.to_string(),
-                        &prettify_time(&now, child.last_modified),
-                        &prettify_size(child.size),
-                    ],
-                    &column_widths,
-                    &column_alignments,
-                    &vec![
-                        colors::WHITE,
-                        colors::WHITE,
-                        colorize_type(child.file_type),
-                        colorize_time(&now, child.last_modified),
-                        colorize_size(child.size),
-                    ],
+                    &table_contents[index],
+                    column_widths,
+                    &column_alignments[index],
+                    &content_colors[index],
                     COLUMN_MARGIN,
-                    Some(config.table_width),
+                    (true, true),
                 );
             }
+
+            print_horizontal_line(
+                None,  // background
+                curr_table_width,
+                (false, true),   // (is top, is bottom)
+                (true, true),    // (left border, right border)
+            );
         },
         None => {
             // TODO: what do I do here?
@@ -326,17 +347,21 @@ fn add_nested_contents<'a>(
 // for that, I have to make sure that the file names never contain non-ascii chars
 fn print_row(
     background: Color,
-    contents: Vec<&str>,
+    contents: &Vec<String>,
     widths: &Vec<usize>,
     alignments: &Vec<Alignment>,
     colors: &Vec<Color>,
     margin: usize,
-    fill_width: Option<usize>,
+    borders: (bool, bool),  // (left, right)
 ) {
     debug_assert_eq!(contents.len(), widths.len());
     debug_assert_eq!(contents.len(), alignments.len());
     debug_assert_eq!(contents.len(), colors.len());
     let mut curr_table_width = 0;
+
+    if borders.0 {
+        print!("│");
+    }
 
     if contents.len() > 0 {
         print!(
@@ -375,9 +400,8 @@ fn print_row(
 
             let line = format!(
                 "{}...{}",
-                // TODO: it has to make sure that all the chars are single-byte
-                contents[i].get(..first_half).unwrap().color(colors[i]),
-                contents[i].get((curr_content_len - last_half)..).unwrap().color(colors[i]),
+                contents[i].chars().collect::<Vec<_>>()[..first_half].iter().collect::<String>().color(colors[i]),
+                contents[i].chars().collect::<Vec<_>>()[(curr_content_len - last_half)..].iter().collect::<String>().color(colors[i]),
             );
 
             print!("{}", line.on_color(background));
@@ -391,13 +415,8 @@ fn print_row(
         curr_table_width += margin + widths[i];
     }
 
-    if let Some(width) = fill_width {
-        if curr_table_width < width {
-            print!(
-                "{}",
-                " ".repeat(width - curr_table_width).on_color(background),
-            );
-        }
+    if borders.1 {
+        print!("│");
     }
 
     print!("\n");
@@ -419,12 +438,116 @@ fn render_indented_message(
 fn print_horizontal_line(
     background: Option<Color>,
     width: usize,
+    vertical_position: (bool, bool),  // (is top, is bottom)
+    borders: (bool, bool),  // (left, right)
 ) {
+    if borders.0 {  // left border
+        if vertical_position.0 {  // is top
+            print!("╭");
+        }
+
+        else if vertical_position.1 {  // is bottom
+            print!("╰");
+        }
+
+        else {
+            print!("├");
+        }
+    }
+
     if let Some(c) = background {
-        println!("{}", "─".repeat(width).on_color(c));
+        print!("{}", "─".repeat(width).on_color(c));
     }
 
     else {
-        println!("{}", "─".repeat(width));
+        print!("{}", "─".repeat(width));
     }
+
+    if borders.1 {  // right border
+        if vertical_position.0 {  // is top
+            print!("╮");
+        }
+
+        else if vertical_position.1 {  // is bottom
+            print!("╯");
+        }
+
+        else {
+            print!("┤");
+        }
+    }
+
+    print!("\n");
+}
+
+// it has some odd rules to follow...
+// Let's say a row has 1 ~ M columns (1 <= M).
+// 1. The first row must have M columns.
+// 2. The other rows can have any number (1 ~ M) of columns.
+// 3. If a row has N columns (N < M), the last column has rowspan (M - N + 1), and the other columns have rowspan 1.
+fn calc_table_column_widths(
+    table_contents: &Vec<Vec<String>>,
+    total_width: Option<usize>,
+    column_margin: usize,
+) -> HashMap<usize, Vec<usize>> {
+    let mut max_column_widths = table_contents[0].iter().map(|c| c.len()).collect::<Vec<_>>();
+    let mut col_counts = HashSet::new();
+
+    for row in table_contents[1..].iter() {
+        let curr_row_widths = row.iter().map(|c| c.len()).collect::<Vec<_>>();
+        col_counts.insert(row.len());
+
+        if curr_row_widths.len() == max_column_widths.len() {
+            for i in 0..curr_row_widths.len() {
+                max_column_widths[i] = max_column_widths[i].max(curr_row_widths[i]);
+            }
+        }
+
+        else {
+            for i in 0..(curr_row_widths.len() - 1) {
+                max_column_widths[i] = max_column_widths[i].max(curr_row_widths[i]);
+            }
+        }
+    }
+
+    let mut max_total_width = max_column_widths.iter().sum::<usize>() + column_margin * (max_column_widths.len() + 1);
+
+    if let Some(width) = total_width {
+        if width < max_total_width {
+            let mut diff = max_total_width - width;
+
+            // TODO: it might loop forever
+            while diff > 0 {
+                for w in max_column_widths.iter_mut() {
+                    if *w > 16 && diff > 0 {
+                        *w -= 1;
+                        diff -= 1;
+                    }
+                }
+            }
+
+            max_total_width = max_column_widths.iter().sum::<usize>() + column_margin * (max_column_widths.len() + 1);
+        }
+    }
+
+    let mut result = HashMap::with_capacity(col_counts.len());
+
+    for col_count in col_counts.into_iter() {
+        let mut widths = Vec::with_capacity(col_count);
+        let mut curr_total_width = 0;
+
+        for i in 0..(col_count - 1) {
+            widths.push(max_column_widths[i]);
+            curr_total_width += max_column_widths[i];
+        }
+
+        widths.push(max_total_width - curr_total_width - column_margin * (col_count + 1));
+
+        result.insert(
+            col_count,
+            widths
+        );
+    }
+
+    result
 }

@@ -26,7 +26,7 @@ fn main() {
     }
 
     if is_interactive_mode {
-        clearscreen::clear().unwrap();
+        // clearscreen::clear().unwrap();
     }
 
     let mut curr_dir_uid = Uid::BASE;
@@ -47,7 +47,7 @@ fn main() {
                 curr_dir_uid = curr_dir.get_parent_uid();
             }
 
-            clearscreen::clear().unwrap();
+            // clearscreen::clear().unwrap();
 
             unsafe { IS_MASTER_WORKING = true; }
             print_dir(curr_dir_uid, PrintDirConfig::default());

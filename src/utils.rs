@@ -45,6 +45,7 @@ fn get_path_by_file(file: &File) -> Option<String> {
 
             Some(parent_path.to_str().unwrap().to_string())
         },
+        None if file.uid == Uid::ROOT => Some(String::from("/")),
         None => None,
     }
 }

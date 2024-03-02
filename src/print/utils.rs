@@ -73,7 +73,7 @@ pub fn prettify_time(now: &SystemTime, time: SystemTime) -> String {
 pub fn colorize_type(ty: FileType) -> Color {
     match ty {
         FileType::File => colors::WHITE,
-        FileType::Dir => colors::BLUE,
+        FileType::Dir => colors::GREEN,
         FileType::Symlink => colors::YELLOW,
     }
 }
@@ -88,11 +88,11 @@ pub fn colorize_size(size: u64) -> Color {
     }
 
     else if size < 1073741824 {
-        colors::RED
+        colors::YELLOW
     }
 
     else {
-        colors::BLUE
+        colors::RED
     }
 }
 
@@ -101,14 +101,18 @@ pub fn colorize_time(now: &SystemTime, time: SystemTime) -> Color {
     let secs = duration.as_secs();
 
     if secs < 10 {
-        colors::RED
+        colors::GREEN
     }
 
     else if secs < 60 * 60 * 24 * 7 * 3 {
         colors::WHITE
     }
 
+    else if secs < 60 * 60 * 24 * 99 {
+        colors::YELLOW
+    }
+
     else {
-        colors::BLUE
+        colors::RED
     }
 }

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
 
-#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum FileType {
     File,
     Dir,
@@ -50,6 +50,7 @@ impl File {
                     return File::from_error_msg(String::new());
                 },
             },
+            None if uid == Some(Uid::ROOT) => String::new(),
             None => {
                 return File::from_error_msg(String::new());
             },
@@ -344,7 +345,6 @@ impl File {
         }
     }
 
-    // TODO: what if it's the root dir?
     pub fn get_parent_uid(&self) -> Uid {
         if !self.is_special_file() {
             match self.parent {
@@ -353,7 +353,15 @@ impl File {
                     let path = get_path_by_uid(self.uid).unwrap();
                     let std_path = Path::new(path);
                     let parent_path = std_path.parent().unwrap().to_string_lossy().to_string();
-                    let parent_uid = File::new_from_dir_path(parent_path, None, None);
+
+                    // TODO: better way to find the root dir
+                    let parent_uid = if parent_path == "/" {
+                        Uid::ROOT
+                    } else {
+                        Uid::normal_file()
+                    };
+
+                    let parent_uid = File::new_from_dir_path(parent_path, Some(parent_uid), None);
 
                     // what an unsafe operation
                     get_file_by_uid(self.uid).unwrap().parent = Some(parent_uid);
@@ -399,5 +407,28 @@ impl File {
             file_ext: None,
             children: None,
         }
+    }
+
+    pub fn debug_info(&self) -> String {
+        let parent_info = match self.parent {
+            Some(p) => format!(
+                "Some({:?})",
+                get_path_by_uid(p),
+            ),
+            None => String::from("None"),
+        };
+        let uid_info = self.uid.debug_info();
+
+        format!(
+            "File {}parent: {parent_info}, uid: {uid_info}, name: {}, last_modified: {:?}, size: {}, recursive_size: {:?}, file_type: {:?}, file_ext: {:?}{}",
+            '{',
+            self.name,
+            self.last_modified,
+            self.size,
+            self.recursive_size,
+            self.file_type,
+            self.file_ext,
+            '}',
+        )
     }
 }
