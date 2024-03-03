@@ -14,6 +14,7 @@ const COLUMN_MARGIN: usize = 2;
 
 pub use config::{
     ColumnKind,
+    FileReadMode,
     PrintDirConfig,
     PrintFileConfig,
     PrintLinkConfig,

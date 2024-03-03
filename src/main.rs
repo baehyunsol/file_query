@@ -124,6 +124,7 @@ fn main() {
                         ViewerKind::Hex => previous_print_file_result.width,
                     };
 
+                    let mut has_changed_path = false;
                     let chars = buffer.chars().collect::<Vec<char>>();
 
                     match chars.get(0) {
@@ -179,13 +180,13 @@ fn main() {
                         },
                         Some('G') => {
                             match previous_print_file_result.viewer_kind {
+                                ViewerKind::Text
+                                | ViewerKind::Image => {
+                                    print_file_config.offset = previous_print_file_result.last_line.unwrap_or(1).max(1) - 1;
+                                },
                                 ViewerKind::Hex => {
-                                    print_file_config.offset = curr_instance.size as usize;
+                                    print_file_config.offset = (curr_instance.size as usize).max(1) - 1;
                                 },
-                                ViewerKind::Image => {
-                                    print_file_config.offset = previous_print_file_result.last_line.unwrap_or(8).max(8) - 8;
-                                },
-                                _ => { /* TODO */ },
                             }
                         },
                         Some('g') => match chars.get(1) {
@@ -199,7 +200,7 @@ fn main() {
                             print_file_config.offset = n as usize;
                         },
                         Some('q') => {
-                            print_file_config.offset = 0;
+                            has_changed_path = true;
                             curr_uid = curr_instance.get_parent_uid();
                             curr_instance = get_file_by_uid(curr_uid).unwrap();
                         },
@@ -209,6 +210,7 @@ fn main() {
 
                                 for ch in chars[1..].iter() {
                                     if *ch == '.' && curr_uid != Uid::ROOT {
+                                        has_changed_path = true;
                                         curr_uid = curr_instance.get_parent_uid();
                                         curr_instance = get_file_by_uid(curr_uid).unwrap();
                                     }
@@ -223,8 +225,18 @@ fn main() {
                         _ => {},
                     }
 
-                    if let Some(line_no) = previous_print_file_result.last_line {
-                        print_file_config.offset = print_file_config.offset.min(line_no);
+                    if has_changed_path {
+                        print_file_config.offset = 0;
+                        print_file_config.highlights = vec![];
+                        print_file_config.read_mode = FileReadMode::default();
+                    }
+
+                    else {
+                        if let Some(line_no) = previous_print_file_result.last_line {
+                            if print_file_config.offset >= line_no {
+                                print_file_config.offset = line_no.max(1) - 1;
+                            }
+                        }
                     }
                 },
             }

@@ -115,9 +115,15 @@ impl Default for PrintDirConfig {
     }
 }
 
-enum FileReadMode {
-    Infer,  // default
+pub enum FileReadMode {
+    Infer,
     Force(ViewerKind),
+}
+
+impl Default for FileReadMode {
+    fn default() -> Self {
+        FileReadMode::Infer
+    }
 }
 
 pub struct PrintFileConfig {

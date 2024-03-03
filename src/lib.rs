@@ -15,6 +15,7 @@ pub use print::{
     print_error_message,
     print_file,
     print_link,
+    FileReadMode,
     PrintDirConfig,
     PrintFileConfig,
     PrintLinkConfig,

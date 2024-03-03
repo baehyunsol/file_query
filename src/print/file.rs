@@ -116,6 +116,12 @@ pub fn print_file(
             highlights = highlights.into_iter().filter(|ln| *ln >= config.offset).collect();
 
             if let Some(text) = try_extract_utf8_text(&content) {
+                let lines_in_file = if truncated == 0 {
+                    Some(text.lines().count())
+                } else {
+                    None
+                };
+
                 let mut lines = vec![
                     vec![
                         String::from("line"),
@@ -297,7 +303,7 @@ pub fn print_file(
 
                 println_to_buffer!("took {}", format_duration(Instant::now().duration_since(started_at)));
 
-                PrintFileResult::text_success(0, None)  // TODO
+                PrintFileResult::text_success(0 /* TODO */, lines_in_file)
             }
 
             // image viewer
