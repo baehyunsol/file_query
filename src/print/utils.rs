@@ -1,6 +1,7 @@
 use colored::Color;
 use crate::colors;
 use crate::file::{File, FileType};
+use crate::uid::Uid;
 use crate::utils::get_path_by_uid;
 use image::RgbImage;
 use image::io::{Reader as ImageReader};
@@ -154,7 +155,13 @@ pub fn try_extract_utf8_text(content: &[u8]) -> Option<String> {
     }
 }
 
-pub fn try_read_image(file: &File) -> Option<RgbImage> {
+pub fn try_read_image(file: &File) -> Option<&CachedImage> {
+    for (uid_, img) in unsafe { IMAGE_CACHE.iter() } {
+        if *uid_ == file.uid {
+            return Some(img);
+        }
+    }
+
     let path = if let Some(p) = get_path_by_uid(file.uid) {
         p
     } else {
@@ -174,10 +181,90 @@ pub fn try_read_image(file: &File) -> Option<RgbImage> {
     };
 
     if let Ok(image) = image.decode() {
-        Some(image.to_rgb8())
+        let decoded_image = image.to_rgb8();
+        let (w, h) = decoded_image.dimensions();
+
+        // registers the image to the cache
+        // if it's already registered, it does nothing
+        register_image_to_cache(&decoded_image, file.uid);
+        let cached_img = get_image_from_cache(file.uid);
+
+        Some(cached_img)
     } else {
         None
     }
+}
+
+pub struct CachedImage {
+    pub w: usize,
+    pub h: usize,
+    data: Vec<Color>,
+}
+
+impl CachedImage {
+    pub fn get_pixel(&self, x: usize, y: usize) -> Color {
+        self.data[x + (y << 9)]
+    }
+}
+
+// It can store up to 8 images
+static mut IMAGE_CACHE: [(Uid, CachedImage); 8] = [
+    (Uid::DUMMY, CachedImage { w: 0, h: 0, data: Vec::new() }),
+    (Uid::DUMMY, CachedImage { w: 0, h: 0, data: Vec::new() }),
+    (Uid::DUMMY, CachedImage { w: 0, h: 0, data: Vec::new() }),
+    (Uid::DUMMY, CachedImage { w: 0, h: 0, data: Vec::new() }),
+    (Uid::DUMMY, CachedImage { w: 0, h: 0, data: Vec::new() }),
+    (Uid::DUMMY, CachedImage { w: 0, h: 0, data: Vec::new() }),
+    (Uid::DUMMY, CachedImage { w: 0, h: 0, data: Vec::new() }),
+    (Uid::DUMMY, CachedImage { w: 0, h: 0, data: Vec::new() }),
+];
+
+// new image goes to here
+static mut IMAGE_CACHE_CURSOR: usize = 0;
+
+fn register_image_to_cache(img: &RgbImage, uid: Uid) {
+    for (uid_, _) in unsafe { IMAGE_CACHE.iter() } {
+        if *uid_ == uid {
+            return;
+        }
+    }
+
+    let mut buffer = Vec::with_capacity(1 << 18);
+    let (real_w, real_h) = img.dimensions();
+
+    for y in 0..512 {
+        for x in 0..512 {
+            let [r, g, b] = img.get_pixel(
+                (x * real_w) >> 9,
+                (y * real_h) >> 9,
+            ).0;
+
+            buffer.push(Color::TrueColor { r, g, b });
+        }
+    }
+
+    unsafe {
+        IMAGE_CACHE[IMAGE_CACHE_CURSOR] = (
+            uid,
+            CachedImage {
+                w: real_w as usize,
+                h: real_h as usize,
+                data: buffer,
+            },
+        );
+        IMAGE_CACHE_CURSOR = (IMAGE_CACHE_CURSOR + 1) & 7;
+    }
+}
+
+// It panics if the image is not in the cache
+fn get_image_from_cache<'a>(uid: Uid) -> &'a CachedImage {
+    for (uid_, img) in unsafe { IMAGE_CACHE.iter() } {
+        if *uid_ == uid {
+            return img;
+        }
+    }
+
+    panic!();
 }
 
 pub fn format_duration(duration: Duration) -> String {

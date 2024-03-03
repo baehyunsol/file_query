@@ -5,6 +5,7 @@ pub struct Uid(u128);
 impl Uid {
     pub const BASE: Self = Uid(0);
     pub const ROOT: Self = Uid(1);
+    pub const DUMMY: Self = Uid(u128::MAX);
 }
 
 impl Uid {

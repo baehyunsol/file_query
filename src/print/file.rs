@@ -17,7 +17,6 @@ use super::utils::{
     try_extract_utf8_text,
     try_read_image,
 };
-use colored::Color;
 use crate::colors;
 use crate::uid::Uid;
 use crate::utils::{
@@ -298,10 +297,10 @@ pub fn print_file(
                 PrintFileResult::text_success(0, None)  // TODO
             }
 
-            else if let Some(img) = try_read_image(f_i) {
-                let (real_w, real_h) = img.dimensions();
-
-                let pixeled_img_w = config.max_width.max(20) as u32 - 10;
+            // image viewer
+            else if let Some(cached_img) = try_read_image(f_i) {
+                let pixeled_img_w = config.max_width.max(20) - 10;
+                let (real_w, real_h) = (cached_img.w, cached_img.h);
 
                 // TODO: what if real_w == 0?
                 let pixeled_img_h = pixeled_img_w * real_h / real_w;
@@ -309,8 +308,8 @@ pub fn print_file(
                 // monospace fonts are not squares
                 let pixeled_img_h = pixeled_img_h * 3 / 4;
 
-                let widths = vec![5, pixeled_img_w as usize];
-                let total_width = 5 + pixeled_img_w as usize + COLUMN_MARGIN;
+                let widths = vec![5, pixeled_img_w];
+                let total_width = 5 + pixeled_img_w + COLUMN_MARGIN;
 
                 print_horizontal_line(
                     None,
@@ -362,11 +361,11 @@ pub fn print_file(
                 let mut truncated_rows = 0;
 
                 for y in 0..pixeled_img_h {
-                    if y < config.offset as u32 {
+                    if y < config.offset {
                         continue;
                     }
 
-                    if y >= (config.offset + config.max_row) as u32 {
+                    if y >= (config.offset + config.max_row) {
                         truncated_rows = pixeled_img_h - y;
                         break;
                     }
@@ -374,12 +373,13 @@ pub fn print_file(
                     let mut curr_row_pixels = vec![];
 
                     for x in 0..pixeled_img_w {
-                        let [r, g, b] = img.get_pixel(
-                            x * real_w / pixeled_img_w,
-                            y * real_h / pixeled_img_h,
-                        ).0;
+                        // cached image is always 512 * 512
+                        let color = cached_img.get_pixel(
+                            (x << 9) / pixeled_img_w,
+                            (y << 9) / pixeled_img_h,
+                        );
 
-                        curr_row_pixels.push(Color::TrueColor { r, g, b });
+                        curr_row_pixels.push(color);
                     }
 
                     row_contents.push(vec![y.to_string(), "█".repeat(pixeled_img_w as usize)]);

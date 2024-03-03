@@ -106,7 +106,7 @@ pub fn print_dir(
 
     // we don't called offseted rows 'truncated'
     let shown_rows = nested_levels.iter().filter(|level| **level == 0).count();
-    let truncated_rows = children_num.max(shown_rows + config.offset) - shown_rows - config.offset;
+    let mut truncated_rows = children_num.max(shown_rows + config.offset) - shown_rows - config.offset;
 
     if truncated_rows > 0 {
         children_instances.push(

@@ -64,9 +64,17 @@ fn main() {
                     io::stdin().read_line(&mut buffer).unwrap();
                     buffer = buffer.strip_suffix("\n").unwrap().to_string();
 
-                    if buffer == ".." && curr_uid != Uid::ROOT {
-                        curr_uid = curr_instance.get_parent_uid();
-                        curr_instance = get_file_by_uid(curr_uid).unwrap();
+                    if buffer.starts_with("..") {
+                        for c in buffer.get(1..).unwrap().chars() {
+                            if c == '.' && curr_uid != Uid::ROOT {
+                                curr_uid = curr_instance.get_parent_uid();
+                                curr_instance = get_file_by_uid(curr_uid).unwrap();
+                            }
+
+                            else {
+                                break;
+                            }
+                        }
                     }
 
                     else {
@@ -131,6 +139,12 @@ fn main() {
                                 print_file_config.offset = print_file_config.offset.max(jump_by) - jump_by;
                             },
                         },
+                        Some('n') => {
+                            // next highlighted line
+                        },
+                        Some('N') => {
+                            // previous highlighted line
+                        },
                         Some('G') => {
                             match previous_print_file_result.viewer_kind {
                                 ViewerKind::Hex => {
@@ -160,8 +174,17 @@ fn main() {
                         Some('.') => match chars.get(1) {
                             Some('.') => {  // for convenience, `..` is an alias for `q`
                                 print_file_config.offset = 0;
-                                curr_uid = curr_instance.get_parent_uid();
-                                curr_instance = get_file_by_uid(curr_uid).unwrap();
+
+                                for ch in chars[1..].iter() {
+                                    if *ch == '.' && curr_uid != Uid::ROOT {
+                                        curr_uid = curr_instance.get_parent_uid();
+                                        curr_instance = get_file_by_uid(curr_uid).unwrap();
+                                    }
+
+                                    else {
+                                        break;
+                                    }
+                                }
                             },
                             _ => {},
                         },
