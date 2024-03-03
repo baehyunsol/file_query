@@ -59,6 +59,8 @@ pub struct PrintDirConfig {
     pub show_hidden_files: bool,
     pub max_width: usize,
     pub min_width: usize,
+
+    // every index is 0-based
     pub offset: usize,
 
     // columns[0] MUST BE ColumnKind::Index
@@ -128,6 +130,7 @@ pub struct PrintFileConfig {
     // for image files, it's a row offset
     pub offset: usize,
 
+    // every index is 0-based
     // for text files, it's a line offset
     // for hex files, it's a byte offset
     // for image files, it does nothing

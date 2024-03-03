@@ -182,7 +182,6 @@ pub fn try_read_image(file: &File) -> Option<&CachedImage> {
 
     if let Ok(image) = image.decode() {
         let decoded_image = image.to_rgb8();
-        let (w, h) = decoded_image.dimensions();
 
         // registers the image to the cache
         // if it's already registered, it does nothing

@@ -81,7 +81,7 @@ pub fn print_dir(
     let mut nested_levels;
 
     if config.offset > 0 {
-        children_instances = children_instances[config.offset.min(children_instances.len().max(1) - 1)..].to_vec();
+        children_instances = children_instances[(config.offset.min(children_instances.len().max(1) - 1))..].to_vec();
     }
 
     if children_instances.len() > config.max_row {
@@ -106,7 +106,7 @@ pub fn print_dir(
 
     // we don't called offseted rows 'truncated'
     let shown_rows = nested_levels.iter().filter(|level| **level == 0).count();
-    let mut truncated_rows = children_num.max(shown_rows + config.offset) - shown_rows - config.offset;
+    let truncated_rows = children_num.max(shown_rows + config.offset) - shown_rows - config.offset;
 
     if truncated_rows > 0 {
         children_instances.push(
@@ -190,10 +190,11 @@ pub fn print_dir(
         }
 
         let table_index_formatted = if table_sub_index == 0 {
-            format!("{table_index}   ")
+            format!("{}   ", table_index - 1)
         } else {
             format!(
-                "{table_index}-{table_sub_index}{}",
+                "{}-{table_sub_index}{}",
+                table_index - 1,
                 if table_sub_index < 10 { " " } else { "" },
             )
         };

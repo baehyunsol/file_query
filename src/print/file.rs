@@ -111,7 +111,9 @@ pub fn print_file(
                 },
             }
 
-            let mut highlights = &config.highlights[..];
+            let mut highlights = config.highlights[..].to_vec();
+
+            highlights = highlights.into_iter().filter(|ln| *ln >= config.offset).collect();
 
             if let Some(text) = try_extract_utf8_text(&content) {
                 let mut lines = vec![
@@ -137,7 +139,7 @@ pub fn print_file(
                 let mut h = HighlightLines::new(syntax, &SYNTECT_THEME_SET.themes["base16-ocean.dark"]);
                 let mut curr_line_chars = vec![];
                 let mut curr_line_colors = vec![];
-                let mut line_no = 1;
+                let mut line_no = 0;
                 let mut ch_count = 0;
 
                 'top_loop: for line in LinesWithEndings::from(&text) {
@@ -148,7 +150,7 @@ pub fn print_file(
                             ch_count += 1;
 
                             if ch == '\n' {
-                                if line_no > config.offset {
+                                if line_no >= config.offset {
                                     let (line_no_fmt, line_no_colors) = if highlights.get(0) == Some(&line_no) {
                                         let line_no_fmt = format!(">>> {line_no}");
                                         let line_no_colors = LineColor::Each(vec![
@@ -156,7 +158,7 @@ pub fn print_file(
                                             vec![colors::WHITE; line_no_fmt.len() - 3],
                                         ].concat());
 
-                                        highlights = &highlights[1..];
+                                        highlights = highlights[1..].to_vec();
 
                                         (line_no_fmt, line_no_colors)
                                     } else {
@@ -550,7 +552,7 @@ pub fn print_file(
                 );
 
                 for (line_no, bytes) in buffer.chunks(bytes_per_row).enumerate() {
-                    let mut offset_fmt = format!("{offset:08x}");
+                    let mut offset_fmt = format!("{:08x}", offset & 0xffff_ffff);
                     let mut offset_color = if offset & 255 == 0 {
                         LineColor::All(colors::GREEN)
                     } else {
@@ -569,7 +571,7 @@ pub fn print_file(
                             let highlight_offset = *highlight_offset as u64;
 
                             if offset <= highlight_offset && highlight_offset < offset + bytes_per_row as u64 {
-                                highlights = &highlights[1..];
+                                highlights = highlights[1..].to_vec();
                             }
 
                             else {

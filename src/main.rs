@@ -139,11 +139,23 @@ fn main() {
                                 print_file_config.offset = print_file_config.offset.max(jump_by) - jump_by;
                             },
                         },
-                        Some('n') => {
-                            // next highlighted line
+                        Some('n') if print_file_config.highlights.len() > 0 => {
+                            let new_highlight_index = match print_file_config.highlights.binary_search(&print_file_config.offset) {
+                                Ok(n) => (n + 1) % print_file_config.highlights.len(),
+                                Err(n) if n == print_file_config.highlights.len() => 0,
+                                Err(n) => n,
+                            };
+
+                            print_file_config.offset = print_file_config.highlights[new_highlight_index];
                         },
-                        Some('N') => {
-                            // previous highlighted line
+                        Some('N') if print_file_config.highlights.len() > 0 => {
+                            let new_highlight_index = match print_file_config.highlights.binary_search(&print_file_config.offset) {
+                                Ok(n) => (n + print_file_config.highlights.len() - 1) % print_file_config.highlights.len(),
+                                Err(0) => print_file_config.highlights.len() - 1,
+                                Err(n) => n - 1,
+                            };
+
+                            print_file_config.offset = print_file_config.highlights[new_highlight_index];
                         },
                         Some('G') => {
                             match previous_print_file_result.viewer_kind {
