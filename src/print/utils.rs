@@ -1,6 +1,6 @@
 use colored::Color;
 use crate::colors;
-use crate::file::FileType;
+use crate::file::{File, FileType};
 use std::time::{Duration, SystemTime};
 use syntect::highlighting::Color as SyColor;
 
@@ -149,6 +149,11 @@ pub fn try_extract_utf8_text(content: &[u8]) -> Option<String> {
     else {
         None
     }
+}
+
+pub fn try_read_image(file: &File) -> Option<()> {
+    // TODO
+    None
 }
 
 pub fn format_duration(duration: Duration) -> String {

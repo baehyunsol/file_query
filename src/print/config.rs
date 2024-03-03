@@ -118,10 +118,12 @@ pub struct PrintFileConfig {
 
     // for text files, it's a line offset
     // for hex files, it's a byte offset
+    // for image files, it's a row offset
     pub offset: usize,
 
     // for text files, it's a line offset
     // for hex files, it's a byte offset
+    // for image files, it does nothing
     // make sure that it's sorted
     pub highlights: Vec<usize>,
 }
