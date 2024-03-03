@@ -1,6 +1,8 @@
 use hfile::*;
+use regex::Regex;
+use std::{fs, thread, time};
 use std::collections::HashMap;
-use std::{io, thread, time};
+use std::io::{self, BufRead, BufReader};
 
 fn main() {
     unsafe { IS_MASTER_WORKING = true; }
@@ -203,6 +205,30 @@ fn main() {
                             has_changed_path = true;
                             curr_uid = curr_instance.get_parent_uid();
                             curr_instance = get_file_by_uid(curr_uid).unwrap();
+                        },
+                        Some('/') => {  // TODO: it's very naive implementation
+                            let mut matched_lines = vec![];
+
+                            if chars.len() > 2 {
+                                // [1..(chars.len() - 1)] excludes '/' and '\n'
+                                if let Ok(re) = Regex::new(&chars[1..(chars.len() - 1)].iter().collect::<String>()) {
+                                    if let Some(path) = get_path_by_uid(curr_uid) {
+                                        if let Ok(file) = fs::File::open(path) {
+                                            let line_reader = BufReader::new(file);
+
+                                            for (index, line) in line_reader.lines().enumerate() {
+                                                if let Ok(line) = &line {
+                                                    if re.is_match(line) {
+                                                        matched_lines.push(index);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            print_file_config.highlights = matched_lines;
                         },
                         Some('.') => match chars.get(1) {
                             Some('.') => {  // for convenience, `..` is an alias for `q`
