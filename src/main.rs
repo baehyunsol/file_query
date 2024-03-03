@@ -136,6 +136,9 @@ fn main() {
                                 ViewerKind::Hex => {
                                     print_file_config.offset = curr_instance.size as usize;
                                 },
+                                ViewerKind::Image => {
+                                    print_file_config.offset = previous_print_file_result.last_line.unwrap_or(8).max(8) - 8;
+                                },
                                 _ => { /* TODO */ },
                             }
                         },

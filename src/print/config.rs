@@ -1,4 +1,5 @@
 use super::Alignment;
+use super::result::ViewerKind;
 use terminal_size::{self as ts, terminal_size};
 
 #[derive(Clone, Copy)]
@@ -111,6 +112,11 @@ impl Default for PrintDirConfig {
     }
 }
 
+enum FileReadMode {
+    Infer,  // default
+    Force(ViewerKind),
+}
+
 pub struct PrintFileConfig {
     pub max_row: usize,
     pub max_width: usize,
@@ -126,6 +132,8 @@ pub struct PrintFileConfig {
     // for image files, it does nothing
     // make sure that it's sorted
     pub highlights: Vec<usize>,
+
+    pub read_mode: FileReadMode,
 }
 
 impl PrintFileConfig {
@@ -148,6 +156,7 @@ impl Default for PrintFileConfig {
             min_width: 64,
             offset: 0,
             highlights: vec![],
+            read_mode: FileReadMode::Infer,
         }
     }
 }

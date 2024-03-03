@@ -57,6 +57,15 @@ impl PrintFileResult {
         }
     }
 
+    pub fn image_success(width: usize, height: usize) -> Self {
+        PrintFileResult {
+            is_error: false,
+            width,
+            viewer_kind: ViewerKind::Image,
+            last_line: Some(height),
+        }
+    }
+
     // you MUST NOT read any of these value
     pub fn dummy() -> Self {
         PrintFileResult {

@@ -17,6 +17,7 @@ use super::utils::{
     try_extract_utf8_text,
     try_read_image,
 };
+use colored::Color;
 use crate::colors;
 use crate::uid::Uid;
 use crate::utils::{
@@ -249,7 +250,7 @@ pub fn print_file(
                         prettify_size(f_i.size),
                     ],
                     &vec![
-                        curr_table_width - 16 - COLUMN_MARGIN * 3,
+                        curr_table_width.max(24) - 16 - COLUMN_MARGIN * 3,
                         16,
                     ],
                     &vec![
@@ -298,7 +299,129 @@ pub fn print_file(
             }
 
             else if let Some(img) = try_read_image(f_i) {
-                todo!()
+                let (real_w, real_h) = img.dimensions();
+
+                let pixeled_img_w = config.max_width.max(20) as u32 - 10;
+
+                // TODO: what if real_w == 0?
+                let pixeled_img_h = pixeled_img_w * real_h / real_w;
+
+                let widths = vec![5, pixeled_img_w as usize];
+                let total_width = 5 + pixeled_img_w as usize + COLUMN_MARGIN;
+
+                print_horizontal_line(
+                    None,
+                    total_width + COLUMN_MARGIN * 2,
+                    (true, false),
+                    (true, true),
+                );
+
+                print_row(
+                    colors::BLACK,
+                    &vec![
+                        path.clone(),
+                        format!("{real_w}X{real_h}"),
+                        prettify_size(f_i.size),
+                    ],
+                    &vec![
+                        total_width.max(40) - 32 - COLUMN_MARGIN * 2,
+                        16,
+                        16,
+                    ],
+                    &vec![
+                        Alignment::Left,
+                        Alignment::Left,
+                        Alignment::Left,
+                    ],
+                    &vec![
+                        LineColor::All(colors::WHITE),
+                        LineColor::All(colors::YELLOW),
+                        LineColor::All(colors::YELLOW),
+                    ],
+                    COLUMN_MARGIN,
+                    (true, true),
+                );
+
+                print_horizontal_line(
+                    None,
+                    total_width + COLUMN_MARGIN * 2,
+                    (false, false),
+                    (true, true),
+                );
+
+                // first row: column names
+                let mut row_contents = vec![vec![
+                    String::from("index"),
+                    String::from("image"),
+                ]];
+                let mut row_colors = vec![vec![LineColor::All(colors::WHITE); 2]];
+                let mut row_alignments = vec![vec![Alignment::Center; 2]];
+                let mut truncated_rows = 0;
+
+                for y in 0..pixeled_img_h {
+                    if y < config.offset as u32 {
+                        continue;
+                    }
+
+                    if y >= (config.offset + config.max_row) as u32 {
+                        truncated_rows = pixeled_img_h - y;
+                        break;
+                    }
+
+                    let mut curr_row_pixels = vec![];
+
+                    for x in 0..pixeled_img_w {
+                        let [r, g, b] = img.get_pixel(
+                            x * real_w / pixeled_img_w,
+                            y * real_h / pixeled_img_h,
+                        ).0;
+
+                        curr_row_pixels.push(Color::TrueColor { r, g, b });
+                    }
+
+                    row_contents.push(vec![y.to_string(), "█".repeat(pixeled_img_w as usize)]);
+                    row_colors.push(vec![
+                        LineColor::All(colors::WHITE),  // index
+                        LineColor::Each(curr_row_pixels.clone()),  // image
+                    ]);
+                    row_alignments.push(vec![Alignment::Right, Alignment::Left]);
+                    curr_row_pixels.clear();
+                }
+
+                for i in 0..row_colors.len() {
+                    print_row(
+                        colors::BLACK,
+                        &row_contents[i],
+                        &widths,
+                        &row_alignments[i],
+                        &row_colors[i],
+                        COLUMN_MARGIN,
+                        (true, true),
+                    );
+                }
+
+                if truncated_rows > 0 {
+                    print_row(
+                        colors::BLACK,
+                        &vec![format!("... (truncated {truncated_rows} rows)")],
+                        &vec![total_width],
+                        &vec![Alignment::Left],
+                        &vec![LineColor::All(colors::WHITE)],
+                        COLUMN_MARGIN,
+                        (true, true),
+                    );
+                }
+
+                print_horizontal_line(
+                    None,
+                    total_width + COLUMN_MARGIN * 2,
+                    (false, true),
+                    (true, true),
+                );
+
+                println_to_buffer!("took {}", format_duration(Instant::now().duration_since(started_at)));
+
+                PrintFileResult::image_success(pixeled_img_w as usize, pixeled_img_h as usize)
             }
 
             // hex viewer
@@ -529,7 +652,6 @@ pub fn print_file(
                         break;
                     }
                 }
-
 
                 if truncated_bytes > 0 {
                     print_row(

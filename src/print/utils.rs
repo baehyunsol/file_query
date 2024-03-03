@@ -1,6 +1,9 @@
 use colored::Color;
 use crate::colors;
 use crate::file::{File, FileType};
+use crate::utils::get_path_by_uid;
+use image::RgbImage;
+use image::io::{Reader as ImageReader};
 use std::time::{Duration, SystemTime};
 use syntect::highlighting::Color as SyColor;
 
@@ -151,9 +154,30 @@ pub fn try_extract_utf8_text(content: &[u8]) -> Option<String> {
     }
 }
 
-pub fn try_read_image(file: &File) -> Option<()> {
-    // TODO
-    None
+pub fn try_read_image(file: &File) -> Option<RgbImage> {
+    let path = if let Some(p) = get_path_by_uid(file.uid) {
+        p
+    } else {
+        return None;
+    };
+
+    let image = if let Ok(img) = ImageReader::open(path) {
+        img
+    } else {
+        return None;
+    };
+
+    let image = if let Ok(reader) = image.with_guessed_format() {
+        reader
+    } else {
+        return None;
+    };
+
+    if let Ok(image) = image.decode() {
+        Some(image.to_rgb8())
+    } else {
+        None
+    }
 }
 
 pub fn format_duration(duration: Duration) -> String {
