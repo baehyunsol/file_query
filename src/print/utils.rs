@@ -2,6 +2,7 @@ use colored::Color;
 use crate::colors;
 use crate::file::FileType;
 use std::time::{Duration, SystemTime};
+use syntect::highlighting::Color as SyColor;
 
 // the result must be right-aligned
 pub fn prettify_size(size: u64) -> String {
@@ -165,5 +166,16 @@ pub fn format_duration(duration: Duration) -> String {
 
     else {
         format!("{secs} seconds")
+    }
+}
+
+pub fn convert_ocean_dark_color(c: SyColor) -> Color {
+    if c.r > 190 && c.g > 190 && c.b > 190 {
+        colors::WHITE
+    }
+
+    else {
+        // println!("r: {}, g: {}, b: {}", c.r, c.g, c.b);
+        Color::TrueColor { r: c.r, g: c.g, b: c.b }
     }
 }

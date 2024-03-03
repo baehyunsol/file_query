@@ -38,6 +38,7 @@ use utils::{
     colorize_size,
     colorize_time,
     colorize_type,
+    convert_ocean_dark_color,
     format_duration,
     prettify_size,
     prettify_time,
@@ -74,7 +75,7 @@ pub fn print_dir(
     sort_files(&mut children_instances, config.sort_by, config.sort_reverse);
 
     // it shows contents inside dirs (if there are enough rows)
-    let mut nested_levels = vec![];
+    let mut nested_levels;
 
     if children_num > config.max_row {
         children_instances = children_instances[..config.max_row].to_vec();
@@ -374,6 +375,8 @@ pub fn print_file(
                 },
             }
 
+            let mut highlights = &config.highlights[..];
+
             if let Some(text) = try_extract_utf8_text(&content) {
                 let mut lines = vec![
                     vec![
@@ -410,8 +413,22 @@ pub fn print_file(
 
                             if ch == '\n' {
                                 if line_no >= config.offset {
+                                    let (line_no_fmt, line_no_colors) = if highlights.get(0) == Some(&line_no) {
+                                        let line_no_fmt = format!(">>> {line_no}");
+                                        let line_no_colors = LineColor::Each(vec![
+                                            vec![colors::RED; 3],
+                                            vec![colors::WHITE; line_no_fmt.len() - 3],
+                                        ].concat());
+
+                                        highlights = &highlights[1..];
+
+                                        (line_no_fmt, line_no_colors)
+                                    } else {
+                                        (line_no.to_string(), LineColor::All(colors::WHITE))
+                                    };
+
                                     lines.push(vec![
-                                        format!("{line_no}"),
+                                        line_no_fmt,
                                         String::from("│"),
                                         curr_line_chars.iter().collect::<String>(),
                                     ]);
@@ -421,7 +438,7 @@ pub fn print_file(
                                         Alignment::Left,   // content
                                     ]);
                                     colors.push(vec![
-                                        LineColor::All(colors::WHITE),
+                                        line_no_colors,
                                         LineColor::All(colors::WHITE),  // border
                                         LineColor::Each(curr_line_colors),
                                     ]);
@@ -440,11 +457,7 @@ pub fn print_file(
                             else {
                                 // tmp hack: it cannot render '\r' characters properly
                                 curr_line_chars.push(if ch == '\r' { ' ' } else { ch });
-                                curr_line_colors.push(Color::TrueColor {
-                                    r: style.foreground.r,
-                                    g: style.foreground.g,
-                                    b: style.foreground.b,
-                                });
+                                curr_line_colors.push(convert_ocean_dark_color(style.foreground));
                             }
                         }
                     }
@@ -558,7 +571,7 @@ pub fn print_file(
                 let mut buffer = [0; 16384];
 
                 let read_result = match fs::File::open(&path) {
-                    Ok(mut f) => {
+                    Ok(f) => {
                         #[cfg(unix)]
                         let r = f.read_at(&mut buffer, offset);
 
@@ -647,14 +660,49 @@ pub fn print_file(
                     COLUMN_MARGIN,
                     (true, true),
                 );
+                // if line_no >= config.offset {
+                //     let (line_no_fmt, line_no_colors) = if highlights.get(0) == Some(&line_no) {
+                //         let line_no_fmt = format!(">>> {line_no}");
+                //         let line_no_colors = LineColor::Each(vec![
+                //             vec![colors::RED; 3],
+                //             vec![colors::WHITE; line_no_fmt.len() - 3],
+                //         ].concat());
+
+                //         highlights = &highlights[1..];
+
+                //         (line_no_fmt, line_no_colors)
+                //     } else {
+                //         (line_no.to_string(), LineColor::All(colors::WHITE))
+                //     };
 
                 for (line_no, bytes) in buffer.chunks(bytes_per_row).enumerate() {
-                    let offset_fmt = format!("{offset:08x}");
-                    let offset_color = if offset & 255 == 0 {
+                    let mut offset_fmt = format!("{offset:08x}");
+                    let mut offset_color = if offset & 255 == 0 {
                         LineColor::All(colors::GREEN)
                     } else {
                         LineColor::All(colors::WHITE)
                     };
+
+                    if let Some(highlight_offset) = highlights.get(0) {
+                        let highlight_offset = *highlight_offset as u64;
+
+                        if offset <= highlight_offset && highlight_offset < offset + bytes_per_row as u64 {
+                            offset_fmt = String::from(">>>>>>>>");
+                            offset_color = LineColor::All(colors::RED);
+                        }
+
+                        while let Some(highlight_offset) = highlights.get(0) {
+                            let highlight_offset = *highlight_offset as u64;
+
+                            if offset <= highlight_offset && highlight_offset < offset + bytes_per_row as u64 {
+                                highlights = &highlights[1..];
+                            }
+
+                            else {
+                                break;
+                            }
+                        }
+                    }
 
                     let mut bytes_fmt = vec![];
                     let mut bytes_colors = vec![];

@@ -117,6 +117,11 @@ pub struct PrintFileConfig {
     // for text files, it's a line offset
     // for hex files, it's a byte offset
     pub offset: usize,
+
+    // for text files, it's a line offset
+    // for hex files, it's a byte offset
+    // make sure that it's sorted
+    pub highlights: Vec<usize>,
 }
 
 impl Default for PrintFileConfig {
@@ -126,6 +131,7 @@ impl Default for PrintFileConfig {
             max_width: 120,
             min_width: 64,
             offset: 0,
+            highlights: vec![],
         }
     }
 }
