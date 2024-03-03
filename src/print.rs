@@ -17,6 +17,12 @@ use syntect::parsing::SyntaxSet;
 use syntect::highlighting::ThemeSet;
 use syntect::util::LinesWithEndings;
 
+#[cfg(unix)]
+use std::os::unix::fs::FileExt;
+
+#[cfg(not(unix))]
+use std::os::windows::fs::FileExt;
+
 mod config;
 mod utils;
 
@@ -300,7 +306,7 @@ pub fn print_dir(
     );
 
     for index in 0..table_contents.len() {
-        let background = if index & 1 == 1 { colors::GRAY } else { colors::BLACK };
+        let background = if index & 1 == 1 { colors::DARK_GRAY } else { colors::BLACK };
         let column_widths = table_column_widths.get(&table_contents[index].len()).unwrap();
 
         print_row(
@@ -346,13 +352,13 @@ pub fn print_file(
             let mut truncated = 0;
 
             match fs::File::open(&path) {
-                Ok(mut f) => if f_i.size <= 65536 {
+                Ok(mut f) => if f_i.size <= (1 << 18) {
                     if let Err(e) = f.read_to_end(&mut content) {
                         println!("{e:?}");
                         return;
                     }
                 } else {
-                    let mut buffer = [0u8; 65536];
+                    let mut buffer = [0u8; (1 << 18)];
 
                     if let Err(e) = f.read_exact(&mut buffer) {
                         println!("{e:?}");
@@ -403,7 +409,7 @@ pub fn print_file(
                             ch_count += 1;
 
                             if ch == '\n' {
-                                if line_no >= config.line_offset {
+                                if line_no >= config.offset {
                                     lines.push(vec![
                                         format!("{line_no}"),
                                         String::from("│"),
@@ -425,7 +431,7 @@ pub fn print_file(
                                 curr_line_colors = vec![];
                                 line_no += 1;
 
-                                if line_no == config.max_row + config.line_offset {
+                                if line_no == config.max_row + config.offset {
                                     truncated = f_i.size - ch_count;
                                     break 'top_loop;
                                 }
@@ -540,8 +546,205 @@ pub fn print_file(
                 println!("took {}", format_duration(Instant::now().duration_since(started_at)));
             }
 
+            // hex viewer
             else {
-                println!("Reading non-utf8 file is not implemented yet!");
+                // I want the offset to be multiple of 8
+                let mut offset = (config.offset - (config.offset & 7)) as u64;
+
+                // I want the offset to be less than f_i.size - 32
+                offset = (offset + 32).min(f_i.size).max(32) - 32;
+
+                // There's no point in reading more than 16KiB
+                let mut buffer = [0; 16384];
+
+                let read_result = match fs::File::open(&path) {
+                    Ok(mut f) => {
+                        #[cfg(unix)]
+                        let r = f.read_at(&mut buffer, offset);
+
+                        #[cfg(not(unix))]
+                        let r = f.seek_read(&mut buffer, offset);
+
+                        r
+                    },
+                    Err(e) => {
+                        println!("{e:?}");
+                        return;
+                    },
+                };
+
+                let bytes_read = match read_result {
+                    Ok(n) => n,
+                    Err(e) => {
+                        println!("{e:?}");
+                        return;
+                    },
+                };
+
+                let buffer = buffer[..bytes_read].to_vec();
+
+                let (
+                    bytes_per_row,
+                    total_width,
+                    col1_width,
+                    col2_width,
+                    col3_width,
+                ) = calc_hex_viewer_row_width(
+                    config.min_width,
+                    config.max_width,
+                );
+
+                print_horizontal_line(
+                    None,
+                    total_width,
+                    (true, false),
+                    (true, true),
+                );
+
+                print_row(
+                    colors::BLACK,
+                    &vec![
+                        path.clone(),
+                        prettify_size(f_i.size),
+                    ],
+                    &vec![
+                        total_width - 16 - COLUMN_MARGIN * 3,
+                        16,
+                    ],
+                    &vec![
+                        Alignment::Left,
+                        Alignment::Right,
+                    ],
+                    &vec![
+                        LineColor::All(colors::WHITE),
+                        LineColor::All(colors::YELLOW),
+                    ],
+                    COLUMN_MARGIN,
+                    (true, true),
+                );
+
+                print_horizontal_line(
+                    None,
+                    total_width,
+                    (false, false),
+                    (true, true),
+                );
+
+                print_row(
+                    colors::BLACK,
+                    &vec![
+                        "offset".to_string(),
+                        "hex".to_string(),
+                        "ascii".to_string(),
+                    ],
+                    &vec![
+                        col1_width,
+                        col2_width,
+                        col3_width,
+                    ],
+                    &vec![Alignment::Center; 3],
+                    &vec![LineColor::All(colors::WHITE); 3],
+                    COLUMN_MARGIN,
+                    (true, true),
+                );
+
+                for (line_no, bytes) in buffer.chunks(bytes_per_row).enumerate() {
+                    let offset_fmt = format!("{offset:08x}");
+                    let offset_color = if offset & 255 == 0 {
+                        LineColor::All(colors::GREEN)
+                    } else {
+                        LineColor::All(colors::WHITE)
+                    };
+
+                    let mut bytes_fmt = vec![];
+                    let mut bytes_colors = vec![];
+                    let mut ascii_fmt = vec![];
+                    let mut ascii_colors = vec![];
+
+                    for (index, byte) in bytes.iter().enumerate() {
+                        bytes_fmt.push(format!("{byte:02x}"));
+
+                        if *byte == 0 {
+                            bytes_colors.push(colors::GRAY);
+                            bytes_colors.push(colors::GRAY);
+                        }
+
+                        else {
+                            bytes_colors.push(colors::YELLOW);
+                            bytes_colors.push(colors::YELLOW);
+                        }
+
+                        if b' ' <= *byte && *byte <= b'~' {
+                            ascii_fmt.push((*byte as char).to_string());
+                            ascii_colors.push(colors::YELLOW);
+                        }
+
+                        else {
+                            ascii_fmt.push(".".to_string());
+                            ascii_colors.push(colors::GRAY);
+                        }
+
+                        if index == bytes.len() - 1 {
+                            // nop
+                        }
+
+                        else if index & 7 == 7 {
+                            bytes_fmt.push("  ".to_string());
+                            bytes_colors.push(colors::WHITE);
+                            bytes_colors.push(colors::WHITE);
+
+                            ascii_fmt.push("  ".to_string());
+                            ascii_colors.push(colors::WHITE);
+                            ascii_colors.push(colors::WHITE);
+                        }
+
+                        else {
+                            bytes_fmt.push(" ".to_string());
+                            bytes_colors.push(colors::WHITE);
+                        }
+                    }
+
+                    let bytes_fmt = bytes_fmt.concat();
+                    let ascii_fmt = ascii_fmt.concat();
+
+                    // it makes sense because all the rows have the same dimension
+                    let column_widths = vec![
+                        offset_fmt.len(),
+                        bytes_fmt.len(),
+                        ascii_fmt.len(),
+                    ];
+
+                    print_row(
+                        colors::BLACK,
+                        &vec![
+                            offset_fmt,
+                            bytes_fmt,
+                            ascii_fmt,
+                        ],
+                        &column_widths,
+                        &vec![Alignment::Right, Alignment::Left, Alignment::Left],
+                        &vec![
+                            offset_color,
+                            LineColor::Each(bytes_colors),
+                            LineColor::Each(ascii_colors),
+                        ],
+                        COLUMN_MARGIN,
+                        (true, true),
+                    );
+
+                    offset += bytes_per_row as u64;
+
+                    if line_no == config.max_row {
+                        break;
+                    }
+                }
+
+                print_horizontal_line(
+                    None,
+                    total_width,
+                    (false, true),
+                    (true, true),
+                );
             }
         },
         None => {
@@ -908,6 +1111,45 @@ fn calc_table_column_widths(
     }
 
     result
+}
+
+// '  00000000  7f 45 4c 46  .ELF  '
+const HEX_VIEWER_4_BYTES: usize = 23 + 4 * COLUMN_MARGIN;
+
+// '  00000000  7f 45 4c 46 02 01 01 00  .ELF....  '
+const HEX_VIEWER_8_BYTES: usize = 39 + 4 * COLUMN_MARGIN;
+
+// '  00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  .ELF....  ........  '
+const HEX_VIEWER_16_BYTES: usize = 74 + 4 * COLUMN_MARGIN;
+
+// '  00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  03 00 3e 00 01 00 00 00  a0 a1 03 00 00 00 00 00  .ELF....  ........  ..>.....  ........  '
+const HEX_VIEWER_32_BYTES: usize = 144 + 4 * COLUMN_MARGIN;
+
+fn calc_hex_viewer_row_width(
+    min_width: usize,
+    max_width: usize,
+) -> (
+    usize,  // bytes per row
+    usize,  // total width
+    usize,  // col1 width
+    usize,  // col2 width
+    usize,  // col3 width
+) {
+    if max_width < HEX_VIEWER_8_BYTES {
+        (4, HEX_VIEWER_4_BYTES, 8, 11, 4)
+    }
+
+    else if max_width < HEX_VIEWER_16_BYTES {
+        (8, HEX_VIEWER_8_BYTES, 8, 23, 8)
+    }
+
+    else if max_width < HEX_VIEWER_32_BYTES {
+        (16, HEX_VIEWER_16_BYTES, 8, 48, 18)
+    }
+
+    else {
+        (32, HEX_VIEWER_32_BYTES, 8, 98, 38)
+    }
 }
 
 // it doesn't check whether `content` has arrows or not

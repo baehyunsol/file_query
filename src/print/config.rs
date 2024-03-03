@@ -70,9 +70,9 @@ impl PrintDirConfig {
         if let Some((ts::Width(w), ts::Height(h))) = terminal_size() {
             let w = w as usize;
             let h = h as usize;
-            self.max_width = w;
-            self.min_width = w >> 2;
-            self.max_row = h.max(24).min(84) - 4;
+            self.max_width = w.max(36) - 4;
+            self.min_width = self.max_width >> 2;
+            self.max_row = h.max(28).min(88) - 8;
         }
     }
 
@@ -114,8 +114,9 @@ pub struct PrintFileConfig {
     pub max_width: usize,
     pub min_width: usize,
 
-    // read from nth line
-    pub line_offset: usize,
+    // for text files, it's a line offset
+    // for hex files, it's a byte offset
+    pub offset: usize,
 }
 
 impl Default for PrintFileConfig {
@@ -124,7 +125,7 @@ impl Default for PrintFileConfig {
             max_row: 60,
             max_width: 120,
             min_width: 64,
-            line_offset: 0,
+            offset: 0,
         }
     }
 }
@@ -134,9 +135,9 @@ impl PrintFileConfig {
         if let Some((ts::Width(w), ts::Height(h))) = terminal_size() {
             let w = w as usize;
             let h = h as usize;
-            self.max_width = w;
-            self.min_width = w >> 2;
-            self.max_row = h.max(24).min(84) - 4;
+            self.max_width = w.max(36) - 4;
+            self.min_width = self.max_width >> 2;
+            self.max_row = h.max(28).min(88) - 8;
         }
     }
 }
