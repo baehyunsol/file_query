@@ -59,6 +59,8 @@ pub struct PrintDirConfig {
     pub max_width: usize,
     pub min_width: usize,
 
+    // TODO: offset (like that of SQL and PrintFileConfig)
+
     // columns[0] MUST BE ColumnKind::Index
     // columns[1] MUST BE ColumnKind::Name
     // users can set columns[2..]
@@ -124,6 +126,18 @@ pub struct PrintFileConfig {
     pub highlights: Vec<usize>,
 }
 
+impl PrintFileConfig {
+    pub fn adjust_output_dimension(&mut self) {
+        if let Some((ts::Width(w), ts::Height(h))) = terminal_size() {
+            let w = w as usize;
+            let h = h as usize;
+            self.max_width = w.max(36) - 4;
+            self.min_width = self.max_width >> 2;
+            self.max_row = h.max(28).min(88) - 8;
+        }
+    }
+}
+
 impl Default for PrintFileConfig {
     fn default() -> Self {
         PrintFileConfig {
@@ -136,7 +150,13 @@ impl Default for PrintFileConfig {
     }
 }
 
-impl PrintFileConfig {
+pub struct PrintLinkConfig {
+    pub max_row: usize,
+    pub max_width: usize,
+    pub min_width: usize,
+}
+
+impl PrintLinkConfig {
     pub fn adjust_output_dimension(&mut self) {
         if let Some((ts::Width(w), ts::Height(h))) = terminal_size() {
             let w = w as usize;
@@ -144,6 +164,16 @@ impl PrintFileConfig {
             self.max_width = w.max(36) - 4;
             self.min_width = self.max_width >> 2;
             self.max_row = h.max(28).min(88) - 8;
+        }
+    }
+}
+
+impl Default for PrintLinkConfig {
+    fn default() -> Self {
+        PrintLinkConfig {
+            max_row: 60,
+            max_width: 120,
+            min_width: 64,
         }
     }
 }

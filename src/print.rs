@@ -24,6 +24,7 @@ use std::os::unix::fs::FileExt;
 use std::os::windows::fs::FileExt;
 
 mod config;
+mod result;
 mod utils;
 
 const COLUMN_MARGIN: usize = 2;
@@ -32,6 +33,13 @@ pub use config::{
     ColumnKind,
     PrintDirConfig,
     PrintFileConfig,
+    PrintLinkConfig,
+};
+pub use result::{
+    PrintDirResult,
+    PrintFileResult,
+    PrintLinkResult,
+    ViewerKind,
 };
 use utils::{
     colorize_name,
@@ -42,12 +50,30 @@ use utils::{
     format_duration,
     prettify_size,
     prettify_time,
+    split_long_str,
     try_extract_utf8_text,
 };
 
 lazy_static! {
     static ref SYNTECT_SYNTAX_SET: SyntaxSet = SyntaxSet::load_defaults_newlines();
     static ref SYNTECT_THEME_SET: ThemeSet = ThemeSet::load_defaults();
+}
+
+static mut SCREEN_BUFFER: Vec<String> = Vec::new();
+
+macro_rules! print_to_buffer {
+    ($($arg:tt)*) => {
+        unsafe {
+            SCREEN_BUFFER.push(format!($($arg)*));
+        }
+    };
+}
+
+macro_rules! println_to_buffer {
+    ($($arg:tt)*) => {
+        print_to_buffer!($($arg)*);
+        print_to_buffer!("\n");
+    };
 }
 
 #[derive(Clone)]
@@ -60,7 +86,7 @@ enum Alignment {
 pub fn print_dir(
     uid: Uid,
     config: &PrintDirConfig,
-) {
+) -> PrintDirResult {
     let started_at = Instant::now();
     let file = get_file_by_uid(uid).unwrap();
 
@@ -70,7 +96,19 @@ pub fn print_dir(
 
     // num of children BEFORE truncated
     let children_num = children_instances.len();
-    let curr_dir_path = get_path_by_uid(uid).unwrap();
+    let curr_dir_path = match get_path_by_uid(uid) {
+        Some(path) => path,
+        None => {
+            print_error_message(
+                Some(file),
+                None,
+                format!("get_path_by_uid({}) has failed", uid.debug_info()),
+                config.min_width,
+                config.max_width,
+            );
+            return PrintDirResult::error();
+        },
+    };
 
     sort_files(&mut children_instances, config.sort_by, config.sort_reverse);
 
@@ -327,15 +365,27 @@ pub fn print_dir(
         (false, true),   // (is top, is bottom)
         (true, true),    // (left border, right border)
     );
-    println!("{}", config.into_sql_string());
-    println!("took {}", format_duration(Instant::now().duration_since(started_at)));
+    println_to_buffer!("{}", config.into_sql_string());
+    println_to_buffer!("took {}", format_duration(Instant::now().duration_since(started_at)));
+
+    PrintDirResult::success()
 }
 
-pub fn print_link(uid: Uid) {
+pub fn print_link(
+    uid: Uid,
+    config: &PrintLinkConfig,
+) -> PrintLinkResult {
     match get_path_by_uid(uid) {
-        Some(path) => {},
+        Some(path) => PrintLinkResult::success(),
         None => {
-            // TODO: what do I do here?
+            print_error_message(
+                None,
+                None,
+                format!("get_path_by_uid({}) has failed", uid.debug_info()),
+                config.min_width,
+                config.max_width,
+            );
+            PrintLinkResult::error()
         },
     }
 }
@@ -343,7 +393,7 @@ pub fn print_link(uid: Uid) {
 pub fn print_file(
     uid: Uid,
     config: &PrintFileConfig,
-) {
+) -> PrintFileResult {
     let started_at = Instant::now();
 
     match get_path_by_uid(uid) {
@@ -355,23 +405,41 @@ pub fn print_file(
             match fs::File::open(&path) {
                 Ok(mut f) => if f_i.size <= (1 << 18) {
                     if let Err(e) = f.read_to_end(&mut content) {
-                        println!("{e:?}");
-                        return;
+                        print_error_message(
+                            Some(f_i),
+                            Some(path.to_string()),
+                            format!("{e:?}"),
+                            config.min_width,
+                            config.max_width,
+                        );
+                        return PrintFileResult::error();
                     }
                 } else {
                     let mut buffer = [0u8; (1 << 18)];
 
                     if let Err(e) = f.read_exact(&mut buffer) {
-                        println!("{e:?}");
-                        return;
+                        print_error_message(
+                            Some(f_i),
+                            Some(path.to_string()),
+                            format!("{e:?}"),
+                            config.min_width,
+                            config.max_width,
+                        );
+                        return PrintFileResult::error();
                     }
 
                     content = buffer.to_vec();
                     truncated = f_i.size - content.len() as u64;
                 },
                 Err(e) => {
-                    println!("{e:?}");
-                    return;
+                    print_error_message(
+                        Some(f_i),
+                        Some(path.to_string()),
+                        format!("{e:?}"),
+                        config.min_width,
+                        config.max_width,
+                    );
+                    return PrintFileResult::error();
                 },
             }
 
@@ -412,7 +480,7 @@ pub fn print_file(
                             ch_count += 1;
 
                             if ch == '\n' {
-                                if line_no >= config.offset {
+                                if line_no > config.offset {
                                     let (line_no_fmt, line_no_colors) = if highlights.get(0) == Some(&line_no) {
                                         let line_no_fmt = format!(">>> {line_no}");
                                         let line_no_colors = LineColor::Each(vec![
@@ -556,7 +624,9 @@ pub fn print_file(
                     (true, true),
                 );
 
-                println!("took {}", format_duration(Instant::now().duration_since(started_at)));
+                println_to_buffer!("took {}", format_duration(Instant::now().duration_since(started_at)));
+
+                PrintFileResult::text_success(0, None)  // TODO
             }
 
             // hex viewer
@@ -581,16 +651,30 @@ pub fn print_file(
                         r
                     },
                     Err(e) => {
-                        println!("{e:?}");
-                        return;
+                        print_error_message(
+                            Some(f_i),
+                            Some(path.to_string()),
+                            format!("{e:?}"),
+                            config.min_width,
+                            config.max_width,
+                        );
+                        return PrintFileResult::error();
                     },
                 };
+
+                let mut truncated_bytes = 0;
 
                 let bytes_read = match read_result {
                     Ok(n) => n,
                     Err(e) => {
-                        println!("{e:?}");
-                        return;
+                        print_error_message(
+                            Some(f_i),
+                            Some(path.to_string()),
+                            format!("{e:?}"),
+                            config.min_width,
+                            config.max_width,
+                        );
+                        return PrintFileResult::error();
                     },
                 };
 
@@ -606,6 +690,12 @@ pub fn print_file(
                     config.min_width,
                     config.max_width,
                 );
+
+                let column_widths = vec![
+                    col1_width,
+                    col2_width,
+                    col3_width,
+                ];
 
                 print_horizontal_line(
                     None,
@@ -660,20 +750,6 @@ pub fn print_file(
                     COLUMN_MARGIN,
                     (true, true),
                 );
-                // if line_no >= config.offset {
-                //     let (line_no_fmt, line_no_colors) = if highlights.get(0) == Some(&line_no) {
-                //         let line_no_fmt = format!(">>> {line_no}");
-                //         let line_no_colors = LineColor::Each(vec![
-                //             vec![colors::RED; 3],
-                //             vec![colors::WHITE; line_no_fmt.len() - 3],
-                //         ].concat());
-
-                //         highlights = &highlights[1..];
-
-                //         (line_no_fmt, line_no_colors)
-                //     } else {
-                //         (line_no.to_string(), LineColor::All(colors::WHITE))
-                //     };
 
                 for (line_no, bytes) in buffer.chunks(bytes_per_row).enumerate() {
                     let mut offset_fmt = format!("{offset:08x}");
@@ -755,13 +831,6 @@ pub fn print_file(
                     let bytes_fmt = bytes_fmt.concat();
                     let ascii_fmt = ascii_fmt.concat();
 
-                    // it makes sense because all the rows have the same dimension
-                    let column_widths = vec![
-                        offset_fmt.len(),
-                        bytes_fmt.len(),
-                        ascii_fmt.len(),
-                    ];
-
                     print_row(
                         colors::BLACK,
                         &vec![
@@ -783,8 +852,23 @@ pub fn print_file(
                     offset += bytes_per_row as u64;
 
                     if line_no == config.max_row {
+                        // there's no need to add bytes_per_row, it's already added!
+                        truncated_bytes = f_i.size.max(offset) - offset;
                         break;
                     }
+                }
+
+
+                if truncated_bytes > 0 {
+                    print_row(
+                        colors::BLACK,
+                        &vec![format!("... (truncated {})", prettify_size(truncated_bytes).trim())],
+                        &vec![total_width - COLUMN_MARGIN * 2],
+                        &vec![Alignment::Left],
+                        &vec![LineColor::All(colors::WHITE)],
+                        COLUMN_MARGIN,
+                        (true, true),
+                    );
                 }
 
                 print_horizontal_line(
@@ -793,12 +877,112 @@ pub fn print_file(
                     (false, true),
                     (true, true),
                 );
+                println_to_buffer!("took {}", format_duration(Instant::now().duration_since(started_at)));
+
+                PrintFileResult::hex_success(bytes_per_row)
             }
         },
         None => {
-            // TODO: what do I do here?
+            print_error_message(
+                None,
+                None,
+                format!("get_path_by_uid({}) has failed", uid.debug_info()),
+                config.min_width,
+                config.max_width,
+            );
+
+            PrintFileResult::error()
         },
     }
+}
+
+pub fn print_error_message(
+    file: Option<&File>,
+    path: Option<String>,
+    message: String,
+    min_width: usize,
+    max_width: usize,
+) {
+    let mut rows = vec![];
+
+    if let Some(f) = file {
+        let f_fmt = f.debug_info();
+
+        for (index, line) in split_long_str(f_fmt).into_iter().enumerate() {
+            rows.push(vec![
+                if index == 0 { String::from("instance") } else { String::new() },
+                String::from("│"),
+                line,
+            ]);
+        }
+    }
+
+    if let Some(path) = path {
+        for (index, line) in split_long_str(path).into_iter().enumerate() {
+            rows.push(vec![
+                if index == 0 { String::from("path") } else { String::new() },
+                String::from("│"),
+                line,
+            ]);
+        }
+    }
+
+    for (index, line) in split_long_str(message).into_iter().enumerate() {
+        rows.push(vec![
+            if index == 0 { String::from("message") } else { String::new() },
+            String::from("│"),
+            line,
+        ]);
+    }
+
+    let column_widths = calc_table_column_widths(
+        &rows,
+        Some(max_width),
+        Some(min_width),
+        COLUMN_MARGIN,
+    );
+    let table_width = column_widths.get(&3).unwrap().iter().sum::<usize>() + COLUMN_MARGIN * 2;
+
+    print_horizontal_line(
+        None,
+        table_width + COLUMN_MARGIN * 2,
+        (true, false),
+        (true, true),
+    );
+    print_row(
+        colors::BLACK,
+        &vec![String::from("error")],
+        &vec![table_width],
+        &vec![Alignment::Center],
+        &vec![LineColor::All(colors::WHITE)],
+        COLUMN_MARGIN,
+        (true, true),
+    );
+    print_horizontal_line(
+        None,
+        table_width + COLUMN_MARGIN * 2,
+        (false, false),
+        (true, true),
+    );
+
+    for row in rows.iter() {
+        print_row(
+            colors::BLACK,
+            row,
+            column_widths.get(&row.len()).unwrap(),
+            &vec![Alignment::Center, Alignment::Left, Alignment::Left],
+            &vec![LineColor::All(colors::WHITE); 3],
+            COLUMN_MARGIN,
+            (true, true),
+        );
+    }
+
+    print_horizontal_line(
+        None,
+        table_width + COLUMN_MARGIN * 2,
+        (false, true),
+        (true, true),
+    );
 }
 
 fn add_nested_contents<'a>(
@@ -902,11 +1086,11 @@ fn print_row(
     let mut curr_table_width = 0;
 
     if borders.0 {
-        print!("│");
+        print_to_buffer!("│");
     }
 
     if contents.len() > 0 {
-        print!(
+        print_to_buffer!(
             "{}",
             " ".repeat(margin).on_color(background),
         );
@@ -988,10 +1172,10 @@ fn print_row(
         }
 
         for part in parts.into_iter() {
-            print!("{}", part.on_color(background));
+            print_to_buffer!("{}", part.on_color(background));
         }
 
-        print!(
+        print_to_buffer!(
             "{}",
             " ".repeat(margin).on_color(background),
         );
@@ -1000,10 +1184,10 @@ fn print_row(
     }
 
     if borders.1 {
-        print!("│");
+        print_to_buffer!("│");
     }
 
-    print!("\n");
+    print_to_buffer!("\n");
 }
 
 fn render_indented_message(
@@ -1027,41 +1211,41 @@ fn print_horizontal_line(
 ) {
     if borders.0 {  // left border
         if vertical_position.0 {  // is top
-            print!("╭");
+            print_to_buffer!("╭");
         }
 
         else if vertical_position.1 {  // is bottom
-            print!("╰");
+            print_to_buffer!("╰");
         }
 
         else {
-            print!("├");
+            print_to_buffer!("├");
         }
     }
 
     if let Some(c) = background {
-        print!("{}", "─".repeat(width).on_color(c));
+        print_to_buffer!("{}", "─".repeat(width).on_color(c));
     }
 
     else {
-        print!("{}", "─".repeat(width));
+        print_to_buffer!("{}", "─".repeat(width));
     }
 
     if borders.1 {  // right border
         if vertical_position.0 {  // is top
-            print!("╮");
+            print_to_buffer!("╮");
         }
 
         else if vertical_position.1 {  // is bottom
-            print!("╯");
+            print_to_buffer!("╯");
         }
 
         else {
-            print!("┤");
+            print_to_buffer!("┤");
         }
     }
 
-    print!("\n");
+    print_to_buffer!("\n");
 }
 
 // it has some odd rules to follow...
@@ -1228,4 +1412,18 @@ fn color_arrows(
     }
 
     LineColor::Each(result)
+}
+
+pub fn flip_buffer(clear_screen: bool) {
+    if clear_screen {
+        clearscreen::clear().unwrap();
+    }
+
+    unsafe {
+        for s in SCREEN_BUFFER.iter() {
+            print!("{s}");
+        }
+
+        SCREEN_BUFFER.clear();
+    }
 }

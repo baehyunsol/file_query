@@ -10,11 +10,18 @@ mod utils;
 
 pub use file::{File, FileType};
 pub use print::{
+    flip_buffer,
     print_dir,
+    print_error_message,
     print_file,
     print_link,
     PrintDirConfig,
     PrintFileConfig,
+    PrintLinkConfig,
+    PrintDirResult,
+    PrintFileResult,
+    PrintLinkResult,
+    ViewerKind,
 };
 pub use uid::Uid;
 pub use utils::get_file_by_uid;

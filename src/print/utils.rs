@@ -174,8 +174,29 @@ pub fn convert_ocean_dark_color(c: SyColor) -> Color {
         colors::WHITE
     }
 
+    // not visible on my color scheme
+    else if c.r < 60 && c.g < 60 && c.b < 60 {
+        colors::YELLOW
+    }
+
     else {
         // println!("r: {}, g: {}, b: {}", c.r, c.g, c.b);
         Color::TrueColor { r: c.r, g: c.g, b: c.b }
+    }
+}
+
+// TODO: better implementation
+pub fn split_long_str(s: String) -> Vec<String> {
+    if s.len() < 60 {
+        vec![s]
+    }
+
+    else {
+        let char_count = s.chars().count();
+
+        vec![
+            vec![s.chars().collect::<Vec<char>>()[..(char_count >> 1)].iter().collect::<String>()],
+            vec![s.chars().collect::<Vec<char>>()[(char_count >> 1)..].iter().collect::<String>()],
+        ].concat()
     }
 }
