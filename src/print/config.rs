@@ -59,8 +59,7 @@ pub struct PrintDirConfig {
     pub show_hidden_files: bool,
     pub max_width: usize,
     pub min_width: usize,
-
-    // TODO: offset (like that of SQL and PrintFileConfig)
+    pub offset: usize,
 
     // columns[0] MUST BE ColumnKind::Index
     // columns[1] MUST BE ColumnKind::Name
@@ -81,12 +80,13 @@ impl PrintDirConfig {
 
     pub fn into_sql_string(&self) -> String {
         format!(
-            "SELECT {} FROM cwd{} ORDER BY {}{} LIMIT {};",
+            "SELECT {} FROM cwd{} ORDER BY {}{} LIMIT {}{};",
             self.columns[1..].iter().map(|col| col.col_name()).collect::<Vec<_>>().join(", "),
             if !self.show_hidden_files { " WHERE is_hidden=false" } else { "" },
             self.sort_by.col_name(),
             if self.sort_reverse { " DESC" } else { "" },
             self.max_row,
+            if self.offset != 0 { format!(" OFFSET {}", self.offset) } else { String::new() },
         )
     }
 }
@@ -101,6 +101,7 @@ impl Default for PrintDirConfig {
             show_hidden_files: false,
             max_width: 120,
             min_width: 64,
+            offset: 0,
             columns: vec![
                 ColumnKind::Index,
                 ColumnKind::Name,

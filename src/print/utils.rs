@@ -89,15 +89,15 @@ pub fn colorize_type(ty: FileType) -> Color {
 }
 
 pub fn colorize_size(size: u64) -> Color {
-    if size < 1024 {
+    if size < 9999 {
         colors::GREEN
     }
 
-    else if size < 33554432 {
+    else if size < 9999 << 10 {
         colors::WHITE
     }
 
-    else if size < 1073741824 {
+    else if size < 9999 << 20 {
         colors::YELLOW
     }
 
@@ -110,15 +110,15 @@ pub fn colorize_time(now: &SystemTime, time: SystemTime) -> Color {
     let duration = now.duration_since(time).unwrap();
     let secs = duration.as_secs();
 
-    if secs < 10 {
+    if secs < 99 {
         colors::GREEN
     }
 
-    else if secs < 60 * 60 * 24 * 7 * 3 {
+    else if secs < 24 * 60 * 60 {
         colors::WHITE
     }
 
-    else if secs < 60 * 60 * 24 * 99 {
+    else if secs < 99 * 60 * 60 * 24 {
         colors::YELLOW
     }
 

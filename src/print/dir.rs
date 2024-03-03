@@ -80,12 +80,16 @@ pub fn print_dir(
     // it shows contents inside dirs (if there are enough rows)
     let mut nested_levels;
 
-    if children_num > config.max_row {
+    if config.offset > 0 {
+        children_instances = children_instances[config.offset.min(children_instances.len().max(1) - 1)..].to_vec();
+    }
+
+    if children_instances.len() > config.max_row {
         children_instances = children_instances[..config.max_row].to_vec();
         nested_levels = vec![0; config.max_row];
     }
 
-    else if children_num + 4 < config.max_row {
+    else if children_instances.len() + 4 < config.max_row {
         let (children_instances_, nested_levels_) = add_nested_contents(
             children_instances,
             &config,
@@ -95,12 +99,14 @@ pub fn print_dir(
     }
 
     else {
-        nested_levels = vec![0; children_num];
+        nested_levels = vec![0; children_instances.len()];
     }
 
     let now = SystemTime::now();
 
-    let truncated_rows = children_num - nested_levels.iter().filter(|level| **level == 0).count();
+    // we don't called offseted rows 'truncated'
+    let shown_rows = nested_levels.iter().filter(|level| **level == 0).count();
+    let truncated_rows = children_num.max(shown_rows + config.offset) - shown_rows - config.offset;
 
     if truncated_rows > 0 {
         children_instances.push(
@@ -132,7 +138,7 @@ pub fn print_dir(
     column_alignments.push(vec![Alignment::Center; table_contents[0].len()]);
     content_colors.push(vec![LineColor::All(colors::WHITE); table_contents[0].len()]);
 
-    let mut table_index = 0;
+    let mut table_index = config.offset;
     let mut table_sub_index = 0;
 
     for (index, child) in children_instances.iter().enumerate() {

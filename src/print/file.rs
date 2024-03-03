@@ -306,6 +306,9 @@ pub fn print_file(
                 // TODO: what if real_w == 0?
                 let pixeled_img_h = pixeled_img_w * real_h / real_w;
 
+                // monospace fonts are not squares
+                let pixeled_img_h = pixeled_img_h * 3 / 4;
+
                 let widths = vec![5, pixeled_img_w as usize];
                 let total_width = 5 + pixeled_img_w as usize + COLUMN_MARGIN;
 
