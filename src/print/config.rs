@@ -76,7 +76,7 @@ impl PrintDirConfig {
             let h = h as usize;
             self.max_width = w.max(36) - 4;
             self.min_width = self.max_width >> 2;
-            self.max_row = h.max(28).min(88) - 8;
+            self.max_row = h.max(8).min(168) - 8;
         }
     }
 
@@ -147,7 +147,7 @@ impl PrintFileConfig {
             let h = h as usize;
             self.max_width = w.max(36) - 4;
             self.min_width = self.max_width >> 2;
-            self.max_row = h.max(28).min(88) - 8;
+            self.max_row = h.max(8).min(168) - 8;
         }
     }
 }
@@ -178,7 +178,7 @@ impl PrintLinkConfig {
             let h = h as usize;
             self.max_width = w.max(36) - 4;
             self.min_width = self.max_width >> 2;
-            self.max_row = h.max(28).min(88) - 8;
+            self.max_row = h.max(8).min(168) - 8;
         }
     }
 }

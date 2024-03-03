@@ -1,6 +1,6 @@
 use hfile::*;
 use std::collections::HashMap;
-use std::io;
+use std::{io, thread, time};
 
 fn main() {
     unsafe { IS_MASTER_WORKING = true; }
@@ -17,6 +17,21 @@ fn main() {
     print_dir_config.adjust_output_dimension();
     print_file_config.adjust_output_dimension();
     print_link_config.adjust_output_dimension();
+
+    while print_dir_config.max_width < 40 {
+        println!("Your terminal is too small to run FileQuery. Please resize your terminal and try again.");
+
+        if !is_interactive_mode {
+            return;
+        }
+
+        thread::sleep(time::Duration::from_millis(300));
+
+        print_dir_config.adjust_output_dimension();
+        print_file_config.adjust_output_dimension();
+        print_link_config.adjust_output_dimension();
+        clearscreen::clear().unwrap();
+    }
 
     unsafe {
         FILES = files.as_mut() as *mut HashMap<_, _>;
@@ -75,6 +90,13 @@ fn main() {
                                 break;
                             }
                         }
+                    }
+
+                    // It doesn't go to the home directory, it goes to the path where the program is launched.
+                    // That's because finding HOME in Windows is buggy.
+                    else if buffer == "~" {
+                        curr_uid = Uid::BASE;
+                        curr_instance = get_file_by_uid(curr_uid).unwrap();
                     }
 
                     else {
@@ -142,8 +164,7 @@ fn main() {
                         Some('n') if print_file_config.highlights.len() > 0 => {
                             let new_highlight_index = match print_file_config.highlights.binary_search(&print_file_config.offset) {
                                 Ok(n) => (n + 1) % print_file_config.highlights.len(),
-                                Err(n) if n == print_file_config.highlights.len() => 0,
-                                Err(n) => n,
+                                Err(n) => n % print_file_config.highlights.len(),
                             };
 
                             print_file_config.offset = print_file_config.highlights[new_highlight_index];
@@ -151,8 +172,7 @@ fn main() {
                         Some('N') if print_file_config.highlights.len() > 0 => {
                             let new_highlight_index = match print_file_config.highlights.binary_search(&print_file_config.offset) {
                                 Ok(n) => (n + print_file_config.highlights.len() - 1) % print_file_config.highlights.len(),
-                                Err(0) => print_file_config.highlights.len() - 1,
-                                Err(n) => n - 1,
+                                Err(n) => (n + print_file_config.highlights.len() - 1) % print_file_config.highlights.len(),
                             };
 
                             print_file_config.offset = print_file_config.highlights[new_highlight_index];
@@ -212,6 +232,16 @@ fn main() {
             print_dir_config.adjust_output_dimension();
             print_file_config.adjust_output_dimension();
             print_link_config.adjust_output_dimension();
+
+            while print_dir_config.max_width < 40 {
+                println!("Your terminal is too small to run FileQuery. Please resize your terminal and try again.");
+                thread::sleep(time::Duration::from_millis(300));
+
+                print_dir_config.adjust_output_dimension();
+                print_file_config.adjust_output_dimension();
+                print_link_config.adjust_output_dimension();
+                clearscreen::clear().unwrap();
+            }
 
             unsafe { IS_MASTER_WORKING = true; }
 

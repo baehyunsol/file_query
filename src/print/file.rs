@@ -187,7 +187,8 @@ pub fn print_file(
                                 line_no += 1;
 
                                 if line_no == config.max_row + config.offset {
-                                    truncated = f_i.size - ch_count;
+                                    // in very rare cases, f_i.size is 0 even though there's a content
+                                    truncated = f_i.size.max(ch_count) - ch_count;
                                     break 'top_loop;
                                 }
                             }
