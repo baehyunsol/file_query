@@ -75,6 +75,10 @@ fn main() {
     // TODO: use rustyline or reedline
     if is_interactive_mode {
         loop {
+            print_dir_config.reset_prompt();
+            print_file_config.reset_prompt();
+            print_link_config.reset_prompt();
+
             match curr_mode {
                 FileType::Dir => {
                     let mut buffer = String::new();
@@ -102,11 +106,19 @@ fn main() {
                     }
 
                     else {
+                        let mut has_found_match = false;
+
                         for child in get_file_by_uid(curr_uid).unwrap().get_children(true) {
                             if child.name == buffer {
                                 curr_uid = child.uid;
                                 curr_instance = get_file_by_uid(curr_uid).unwrap();
+                                has_found_match = true;
+                                break;
                             }
+                        }
+
+                        if !has_found_match {
+                            print_dir_config.prompt = format!("{buffer:?} file not found");
                         }
                     }
                 },
@@ -164,13 +176,24 @@ fn main() {
                                 print_file_config.offset = print_file_config.offset.max(jump_by) - jump_by;
                             },
                         },
-                        Some('n') if print_file_config.highlights.len() > 0 => {
-                            let new_highlight_index = match print_file_config.highlights.binary_search(&print_file_config.offset) {
-                                Ok(n) => (n + 1) % print_file_config.highlights.len(),
-                                Err(n) => n % print_file_config.highlights.len(),
-                            };
-
-                            print_file_config.offset = print_file_config.highlights[new_highlight_index];
+                        Some('n') => match chars.get(1) {
+                            Some('o') => match chars.get(2) {
+                                Some('h') => {
+                                    print_file_config.highlights = vec![];
+                                },
+                                _ => {},
+                            },
+                            _ => {
+                                if print_file_config.highlights.len() > 0 {
+                                    let new_highlight_index = match print_file_config.highlights.binary_search(&print_file_config.offset) {
+                                        Ok(n) => (n + 1) % print_file_config.highlights.len(),
+                                        Err(n) => n % print_file_config.highlights.len(),
+                                    };
+        
+                                    print_file_config.offset = print_file_config.highlights[new_highlight_index];
+                                    print_file_config.prompt = format!("search result {}/{}", new_highlight_index + 1, print_file_config.highlights.len());
+                                }
+                            },
                         },
                         Some('N') if print_file_config.highlights.len() > 0 => {
                             let new_highlight_index = match print_file_config.highlights.binary_search(&print_file_config.offset) {
@@ -179,6 +202,7 @@ fn main() {
                             };
 
                             print_file_config.offset = print_file_config.highlights[new_highlight_index];
+                            print_file_config.prompt = format!("search result {}/{}", new_highlight_index + 1, print_file_config.highlights.len());
                         },
                         Some('G') => {
                             match previous_print_file_result.viewer_kind {
@@ -197,7 +221,17 @@ fn main() {
                             },
                             _ => {},
                         },
-                        Some('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
+                        Some('0') => match chars.get(1) {
+                            Some('x') | Some('X') if chars.len() > 2 => {
+                                let n = parse_hex_from(&chars[2..]);
+                                print_file_config.offset = n as usize;
+                            },
+                            _ => {
+                                let n = parse_int_from(&chars[0..]);
+                                print_file_config.offset = n as usize;
+                            },
+                        },
+                        Some('1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
                             let n = parse_int_from(&chars[0..]);
                             print_file_config.offset = n as usize;
                         },
@@ -206,8 +240,10 @@ fn main() {
                             curr_uid = curr_instance.get_parent_uid();
                             curr_instance = get_file_by_uid(curr_uid).unwrap();
                         },
+                        // TODO: search feature in hex viewer
                         Some('/') => {  // TODO: it's very naive implementation
                             let mut matched_lines = vec![];
+                            let mut search_error = true;
 
                             if chars.len() > 2 {
                                 // [1..(chars.len() - 1)] excludes '/' and '\n'
@@ -215,6 +251,7 @@ fn main() {
                                     if let Some(path) = get_path_by_uid(curr_uid) {
                                         if let Ok(file) = fs::File::open(path) {
                                             let line_reader = BufReader::new(file);
+                                            search_error = false;
 
                                             for (index, line) in line_reader.lines().enumerate() {
                                                 if let Ok(line) = &line {
@@ -226,6 +263,15 @@ fn main() {
                                         }
                                     }
                                 }
+                            }
+
+                            if search_error {
+                                print_file_config.prompt = String::from("search failed");
+                            }
+
+                            else {
+                                print_file_config.prompt = format!("found {} results", matched_lines.len());
+                                print_file_config.show_elapsed_time = false;
                             }
 
                             print_file_config.highlights = matched_lines;
@@ -315,7 +361,7 @@ fn main() {
     }
 }
 
-// TODO: it should not belong to `main.rs`
+// TODO: these should not belong to `main.rs`
 fn parse_int_from(chars: &[char]) -> u64 {
     let mut result = 0;
 
@@ -326,6 +372,32 @@ fn parse_int_from(chars: &[char]) -> u64 {
 
         result *= 10;
         result += (*c as u8 - b'0') as u64;
+
+        // let's leave before it overflows
+        if result > 0xffff_ffff_ffff {
+            return result;
+        }
+    }
+
+    result
+}
+
+fn parse_hex_from(chars: &[char]) -> u64 {
+    let mut result = 0;
+
+    for c in chars {
+        let n = if '0' <= *c && *c <= '9' {
+            *c as u8 - b'0'
+        } else if 'A' <= *c && *c <= 'Z' {
+            *c as u8 + 10 - b'A'
+        } else if 'a' <= *c && *c <= 'z' {
+            *c as u8 + 10 - b'a'
+        } else {
+            return result;
+        };
+
+        result <<= 4;
+        result += n as u64;
 
         // let's leave before it overflows
         if result > 0xffff_ffff_ffff {

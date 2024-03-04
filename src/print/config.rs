@@ -63,6 +63,9 @@ pub struct PrintDirConfig {
     // every index is 0-based
     pub offset: usize,
 
+    pub prompt: String,
+    pub show_elapsed_time: bool,
+
     // columns[0] MUST BE ColumnKind::Index
     // columns[1] MUST BE ColumnKind::Name
     // users can set columns[2..]
@@ -76,8 +79,13 @@ impl PrintDirConfig {
             let h = h as usize;
             self.max_width = w.max(36) - 4;
             self.min_width = self.max_width >> 2;
-            self.max_row = h.max(8).min(168) - 8;
+            self.max_row = h.max(28).min(168) - 8;
         }
+    }
+
+    pub fn reset_prompt(&mut self) {
+        self.prompt = String::new();
+        self.show_elapsed_time = true;
     }
 
     pub fn into_sql_string(&self) -> String {
@@ -104,6 +112,8 @@ impl Default for PrintDirConfig {
             max_width: 120,
             min_width: 64,
             offset: 0,
+            prompt: String::new(),
+            show_elapsed_time: true,
             columns: vec![
                 ColumnKind::Index,
                 ColumnKind::Name,
@@ -136,6 +146,9 @@ pub struct PrintFileConfig {
     // for image files, it's a row offset
     pub offset: usize,
 
+    pub prompt: String,
+    pub show_elapsed_time: bool,
+
     // every index is 0-based
     // for text files, it's a line offset
     // for hex files, it's a byte offset
@@ -153,8 +166,13 @@ impl PrintFileConfig {
             let h = h as usize;
             self.max_width = w.max(36) - 4;
             self.min_width = self.max_width >> 2;
-            self.max_row = h.max(8).min(168) - 8;
+            self.max_row = h.max(28).min(168) - 8;
         }
+    }
+
+    pub fn reset_prompt(&mut self) {
+        self.prompt = String::new();
+        self.show_elapsed_time = true;
     }
 }
 
@@ -165,6 +183,8 @@ impl Default for PrintFileConfig {
             max_width: 120,
             min_width: 64,
             offset: 0,
+            prompt: String::new(),
+            show_elapsed_time: true,
             highlights: vec![],
             read_mode: FileReadMode::Infer,
         }
@@ -175,6 +195,8 @@ pub struct PrintLinkConfig {
     pub max_row: usize,
     pub max_width: usize,
     pub min_width: usize,
+    pub prompt: String,
+    pub show_elapsed_time: bool,
 }
 
 impl PrintLinkConfig {
@@ -184,8 +206,13 @@ impl PrintLinkConfig {
             let h = h as usize;
             self.max_width = w.max(36) - 4;
             self.min_width = self.max_width >> 2;
-            self.max_row = h.max(8).min(168) - 8;
+            self.max_row = h.max(28).min(168) - 8;
         }
+    }
+
+    pub fn reset_prompt(&mut self) {
+        self.prompt = String::new();
+        self.show_elapsed_time = true;
     }
 }
 
@@ -195,6 +222,8 @@ impl Default for PrintLinkConfig {
             max_row: 60,
             max_width: 120,
             min_width: 64,
+            prompt: String::new(),
+            show_elapsed_time: true,
         }
     }
 }

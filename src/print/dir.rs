@@ -338,7 +338,13 @@ pub fn print_dir(
         (true, true),    // (left border, right border)
     );
     println_to_buffer!("{}", config.into_sql_string());
-    println_to_buffer!("took {}", format_duration(Instant::now().duration_since(started_at)));
+
+    println_to_buffer!(
+        "{}{}{}",
+        config.prompt,
+        if !config.prompt.is_empty() && config.show_elapsed_time { ": " } else { "" },
+        if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(started_at))) } else { String::new() },
+    );
 
     PrintDirResult::success()
 }
