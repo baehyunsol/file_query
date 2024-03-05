@@ -8,7 +8,7 @@ mod print;
 mod uid;
 mod utils;
 
-pub use file::{File, FileType};
+pub use file::{iterate_paths, File, FileType};
 pub use print::{
     flip_buffer,
     print_dir,

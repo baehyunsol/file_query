@@ -46,6 +46,8 @@ pub struct File {
     pub is_executable: bool,
 }
 
+// TODO: `File::new_from_XXX` generates different UID (and hence different instances) when called multiple times with the same path
+
 impl File {
     // it registers the instance to the cache, and only returns its uid
     pub fn new_from_path_buf(path: PathBuf, uid: Option<Uid>, parent: Option<Uid>) -> Uid {
@@ -320,7 +322,7 @@ impl File {
     }
 
     // not a file
-    // it's either an error or a system prompt
+    // it's either an error or a system alert
     pub fn is_special_file(&self) -> bool {
         self.uid.is_special()
     }
@@ -468,5 +470,37 @@ impl File {
             self.file_ext,
             '}',
         )
+    }
+}
+
+pub fn iterate_paths(start: Uid, paths: &[String]) -> Option<Uid> {  // TODO: Result<Uid, Error>
+    if paths.is_empty() {
+        Some(start)
+    }
+
+    else if paths[0] == "." {
+        iterate_paths(start, &paths[1..])
+    }
+
+    else if paths[0] == ".." {
+        match get_file_by_uid(start) {
+            Some(f) if start != Uid::ROOT => iterate_paths(f.get_parent_uid(), &paths[1..]),
+            _ => None,
+        }
+    }
+
+    else {
+        match get_file_by_uid(start) {
+            Some(f) if f.is_dir() => {
+                for child in f.get_children(true) {
+                    if child.name == paths[0] {
+                        return iterate_paths(child.uid, &paths[1..]);
+                    }
+                }
+
+                None
+            },
+            _ => None,
+        }
     }
 }

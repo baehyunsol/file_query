@@ -16,6 +16,7 @@ fn main() {
     let mut print_file_config = PrintFileConfig::default();
     let mut print_link_config = PrintLinkConfig::default();
 
+    // TODO: it's inefficient to handle 3 (almost) identical configs
     print_dir_config.adjust_output_dimension();
     print_file_config.adjust_output_dimension();
     print_link_config.adjust_output_dimension();
@@ -75,51 +76,73 @@ fn main() {
     // TODO: use rustyline or reedline
     if is_interactive_mode {
         loop {
-            print_dir_config.reset_prompt();
-            print_file_config.reset_prompt();
-            print_link_config.reset_prompt();
-
             match curr_mode {
                 FileType::Dir => {
+                    // TODO: better parsing... or Rusty Line!
                     let mut buffer = String::new();
                     io::stdin().read_line(&mut buffer).unwrap();
+                    print_dir_config.reset_alert();
+
                     buffer = buffer.strip_suffix("\n").unwrap().to_string();
 
-                    if buffer.starts_with("..") {
-                        for c in buffer.get(1..).unwrap().chars() {
-                            if c == '.' && curr_uid != Uid::ROOT {
-                                curr_uid = curr_instance.get_parent_uid();
-                                curr_instance = get_file_by_uid(curr_uid).unwrap();
-                            }
+                    let mut paths = buffer.split('/').map(|p| p.to_string()).collect::<Vec<_>>();
 
-                            else {
-                                break;
-                            }
-                        }
+                    // `../../Music/` -> `../../Music`
+                    // TODO: what if `Music` is a file, not a directory?
+                    // TODO: it doesn't work if the path starts with `/`
+                    if paths.last() == Some(&String::new()) {
+                        paths.pop().unwrap();
                     }
 
-                    // It doesn't go to the home directory, it goes to the path where the program is launched.
-                    // That's because finding HOME in Windows is buggy.
-                    else if buffer == "~" {
-                        curr_uid = Uid::BASE;
-                        curr_instance = get_file_by_uid(curr_uid).unwrap();
-                    }
+                    let chars = buffer.chars().collect::<Vec<char>>();
 
-                    else {
-                        let mut has_found_match = false;
-
-                        for child in get_file_by_uid(curr_uid).unwrap().get_children(true) {
-                            if child.name == buffer {
-                                curr_uid = child.uid;
+                    match chars.get(0) {
+                        Some('~') => {
+                            curr_uid = Uid::BASE;
+                            curr_instance = get_file_by_uid(curr_uid).unwrap();
+                        },
+                        // TODO: duplicate code
+                        Some(';') => match chars.get(1) {  // special commands
+                            Some('j') => match chars.get(2) {
+                                Some('j') => match chars.get(3) {
+                                    Some('j') => {
+                                        print_dir_config.offset += 100;
+                                    },
+                                    _ => {
+                                        print_dir_config.offset += 10;
+                                    },
+                                },
+                                Some(c) if '0' <= *c && *c <= '9' => {
+                                    let n = parse_int_from(&chars[2..]);
+                                    print_dir_config.offset += n as usize;
+                                },
+                                _ => {
+                                    print_dir_config.offset += 1;
+                                },
+                            },
+                            // TODO
+                            Some('k') => match chars.get(2) {
+                                Some('k') => {},
+                                Some(c) if '0' <= *c && *c <= '9' => {},
+                                _ => {},
+                            },
+                            Some(c) if '0' <= *c && *c <= '9' => {
+                                let n = parse_int_from(&chars[1..]);
+                                print_dir_config.offset = n as usize;
+                            },
+                            // TODO: GOTO nth file, not just moving the offset
+                            _ => {},
+                        },
+                        _ => match iterate_paths(curr_uid, &paths) {
+                            Some(uid) => {
+                                curr_uid = uid;
                                 curr_instance = get_file_by_uid(curr_uid).unwrap();
-                                has_found_match = true;
-                                break;
-                            }
-                        }
-
-                        if !has_found_match {
-                            print_dir_config.prompt = format!("{buffer:?} file not found");
-                        }
+                                print_dir_config.offset = 0;
+                            },
+                            None => {
+                                print_dir_config.alert = format!("{buffer:?} file not found");
+                            },
+                        },
                     }
                 },
                 // TODO: what does it do in Symlink mode?
@@ -128,6 +151,8 @@ fn main() {
                     // TODO: better parsing...
                     let mut buffer = String::new();
                     io::stdin().read_line(&mut buffer).unwrap();
+                    print_file_config.reset_alert();
+                    print_link_config.reset_alert();
 
                     let jump_by = match previous_print_file_result.viewer_kind {
                         // a line is a line (for texts and images)
@@ -139,7 +164,7 @@ fn main() {
                     };
 
                     let mut has_changed_path = false;
-                    let chars = buffer.chars().collect::<Vec<char>>();
+                    let chars = buffer.strip_suffix("\n").unwrap().to_string().chars().collect::<Vec<char>>();
 
                     match chars.get(0) {
                         Some('j') => match chars.get(1) {
@@ -151,7 +176,7 @@ fn main() {
                                     print_file_config.offset += 10 * jump_by;
                                 },
                             },
-                            Some('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
+                            Some(c) if '0' <= *c && *c <= '9' => {
                                 let n = parse_int_from(&chars[1..]) as usize;
                                 print_file_config.offset += n * jump_by;
                             },
@@ -168,7 +193,7 @@ fn main() {
                                     print_file_config.offset = print_file_config.offset.max(10 * jump_by) - 10 * jump_by;
                                 },
                             },
-                            Some('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
+                            Some(c) if '0' <= *c && *c <= '9' => {
                                 let n = parse_int_from(&chars[1..]) as usize;
                                 print_file_config.offset = print_file_config.offset.max(n * jump_by) - n * jump_by;
                             },
@@ -189,9 +214,9 @@ fn main() {
                                         Ok(n) => (n + 1) % print_file_config.highlights.len(),
                                         Err(n) => n % print_file_config.highlights.len(),
                                     };
-        
+    
                                     print_file_config.offset = print_file_config.highlights[new_highlight_index];
-                                    print_file_config.prompt = format!("search result {}/{}", new_highlight_index + 1, print_file_config.highlights.len());
+                                    print_file_config.alert = format!("search result {}/{}", new_highlight_index + 1, print_file_config.highlights.len());
                                 }
                             },
                         },
@@ -202,7 +227,7 @@ fn main() {
                             };
 
                             print_file_config.offset = print_file_config.highlights[new_highlight_index];
-                            print_file_config.prompt = format!("search result {}/{}", new_highlight_index + 1, print_file_config.highlights.len());
+                            print_file_config.alert = format!("search result {}/{}", new_highlight_index + 1, print_file_config.highlights.len());
                         },
                         Some('G') => {
                             match previous_print_file_result.viewer_kind {
@@ -231,7 +256,7 @@ fn main() {
                                 print_file_config.offset = n as usize;
                             },
                         },
-                        Some('1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') => {
+                        Some(c) if '1' <= *c && *c <= '9' => {
                             let n = parse_int_from(&chars[0..]);
                             print_file_config.offset = n as usize;
                         },
@@ -246,8 +271,8 @@ fn main() {
                             let mut search_error = true;
 
                             if chars.len() > 2 {
-                                // [1..(chars.len() - 1)] excludes '/' and '\n'
-                                if let Ok(re) = Regex::new(&chars[1..(chars.len() - 1)].iter().collect::<String>()) {
+                                // [1..] excludes '/'
+                                if let Ok(re) = Regex::new(&chars[1..].iter().collect::<String>()) {
                                     if let Some(path) = get_path_by_uid(curr_uid) {
                                         if let Ok(file) = fs::File::open(path) {
                                             let line_reader = BufReader::new(file);
@@ -266,12 +291,11 @@ fn main() {
                             }
 
                             if search_error {
-                                print_file_config.prompt = String::from("search failed");
+                                print_file_config.alert = String::from("search failed");
                             }
 
                             else {
-                                print_file_config.prompt = format!("found {} results", matched_lines.len());
-                                print_file_config.show_elapsed_time = false;
+                                print_file_config.alert = format!("found {} results", matched_lines.len());
                             }
 
                             print_file_config.highlights = matched_lines;

@@ -52,7 +52,6 @@ pub fn print_dir(
     uid: Uid,
     config: &PrintDirConfig,
 ) -> PrintDirResult {
-    let started_at = Instant::now();
     let file = get_file_by_uid(uid).unwrap();
 
     file.init_children();
@@ -341,9 +340,9 @@ pub fn print_dir(
 
     println_to_buffer!(
         "{}{}{}",
-        config.prompt,
-        if !config.prompt.is_empty() && config.show_elapsed_time { ": " } else { "" },
-        if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(started_at))) } else { String::new() },
+        config.alert,
+        if !config.alert.is_empty() && config.show_elapsed_time { ": " } else { "" },
+        if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(config.elapsed_timer.clone()))) } else { String::new() },
     );
 
     PrintDirResult::success()

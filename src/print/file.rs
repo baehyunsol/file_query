@@ -62,8 +62,6 @@ pub fn print_file(
     uid: Uid,
     config: &PrintFileConfig,
 ) -> PrintFileResult {
-    let started_at = Instant::now();
-
     match get_path_by_uid(uid) {
         Some(path) => {
             let f_i = get_file_by_uid(uid).unwrap();
@@ -303,9 +301,9 @@ pub fn print_file(
 
                 println_to_buffer!(
                     "{}{}{}",
-                    config.prompt,
-                    if !config.prompt.is_empty() && config.show_elapsed_time { ": " } else { "" },
-                    if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(started_at))) } else { String::new() },
+                    config.alert,
+                    if !config.alert.is_empty() && config.show_elapsed_time { ": " } else { "" },
+                    if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(config.elapsed_timer.clone()))) } else { String::new() },
                 );
 
                 PrintFileResult::text_success(0 /* TODO */, lines_in_file)
@@ -438,9 +436,9 @@ pub fn print_file(
 
                 println_to_buffer!(
                     "{}{}{}",
-                    config.prompt,
-                    if !config.prompt.is_empty() && config.show_elapsed_time { ": " } else { "" },
-                    if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(started_at))) } else { String::new() },
+                    config.alert,
+                    if !config.alert.is_empty() && config.show_elapsed_time { ": " } else { "" },
+                    if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(config.elapsed_timer.clone()))) } else { String::new() },
                 );
 
                 PrintFileResult::image_success(pixeled_img_w as usize, pixeled_img_h as usize)
@@ -696,9 +694,9 @@ pub fn print_file(
 
                 println_to_buffer!(
                     "{}{}{}",
-                    config.prompt,
-                    if !config.prompt.is_empty() && config.show_elapsed_time { ": " } else { "" },
-                    if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(started_at))) } else { String::new() },
+                    config.alert,
+                    if !config.alert.is_empty() && config.show_elapsed_time { ": " } else { "" },
+                    if config.show_elapsed_time { format!("took {}", format_duration(Instant::now().duration_since(config.elapsed_timer.clone()))) } else { String::new() },
                 );
 
                 PrintFileResult::hex_success(bytes_per_row)

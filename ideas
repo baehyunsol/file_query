@@ -1,0 +1,9 @@
+Playground for any idea
+
+1. multiple tabs
+  - each tab has its own buffer, config, and result
+2. message boxes
+  - before the buffer is flushed, it draws a box on top of everything, and puts the message in the box
+3. Implement File Viewer's commands in Dir Viewer
+  - `n`, `N`, `G`, `gg`, `/`
+  - impl a function `parse_command(c: &[char], curr_offset: usize, highlights: &[usize]) -> Command` which works both for the File Viewer and the Dir Viewer

@@ -1,5 +1,6 @@
 use super::Alignment;
 use super::result::ViewerKind;
+use std::time::Instant;
 use terminal_size::{self as ts, terminal_size};
 
 #[derive(Clone, Copy)]
@@ -63,8 +64,9 @@ pub struct PrintDirConfig {
     // every index is 0-based
     pub offset: usize,
 
-    pub prompt: String,
+    pub alert: String,
     pub show_elapsed_time: bool,
+    pub elapsed_timer: Instant,
 
     // columns[0] MUST BE ColumnKind::Index
     // columns[1] MUST BE ColumnKind::Name
@@ -83,9 +85,10 @@ impl PrintDirConfig {
         }
     }
 
-    pub fn reset_prompt(&mut self) {
-        self.prompt = String::new();
+    pub fn reset_alert(&mut self) {
+        self.alert = String::new();
         self.show_elapsed_time = true;
+        self.elapsed_timer = Instant::now();
     }
 
     pub fn into_sql_string(&self) -> String {
@@ -112,8 +115,9 @@ impl Default for PrintDirConfig {
             max_width: 120,
             min_width: 64,
             offset: 0,
-            prompt: String::new(),
+            alert: String::new(),
             show_elapsed_time: true,
+            elapsed_timer: Instant::now(),
             columns: vec![
                 ColumnKind::Index,
                 ColumnKind::Name,
@@ -146,8 +150,9 @@ pub struct PrintFileConfig {
     // for image files, it's a row offset
     pub offset: usize,
 
-    pub prompt: String,
+    pub alert: String,
     pub show_elapsed_time: bool,
+    pub elapsed_timer: Instant,
 
     // every index is 0-based
     // for text files, it's a line offset
@@ -170,9 +175,10 @@ impl PrintFileConfig {
         }
     }
 
-    pub fn reset_prompt(&mut self) {
-        self.prompt = String::new();
+    pub fn reset_alert(&mut self) {
+        self.alert = String::new();
         self.show_elapsed_time = true;
+        self.elapsed_timer = Instant::now();
     }
 }
 
@@ -183,8 +189,9 @@ impl Default for PrintFileConfig {
             max_width: 120,
             min_width: 64,
             offset: 0,
-            prompt: String::new(),
+            alert: String::new(),
             show_elapsed_time: true,
+            elapsed_timer: Instant::now(),
             highlights: vec![],
             read_mode: FileReadMode::Infer,
         }
@@ -195,8 +202,9 @@ pub struct PrintLinkConfig {
     pub max_row: usize,
     pub max_width: usize,
     pub min_width: usize,
-    pub prompt: String,
+    pub alert: String,
     pub show_elapsed_time: bool,
+    pub elapsed_timer: Instant,
 }
 
 impl PrintLinkConfig {
@@ -210,9 +218,10 @@ impl PrintLinkConfig {
         }
     }
 
-    pub fn reset_prompt(&mut self) {
-        self.prompt = String::new();
+    pub fn reset_alert(&mut self) {
+        self.alert = String::new();
         self.show_elapsed_time = true;
+        self.elapsed_timer = Instant::now();
     }
 }
 
@@ -222,8 +231,9 @@ impl Default for PrintLinkConfig {
             max_row: 60,
             max_width: 120,
             min_width: 64,
-            prompt: String::new(),
+            alert: String::new(),
             show_elapsed_time: true,
+            elapsed_timer: Instant::now(),
         }
     }
 }
