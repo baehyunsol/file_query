@@ -133,15 +133,20 @@ fn main() {
                             // TODO: GOTO nth file, not just moving the offset
                             _ => {},
                         },
-                        _ => match iterate_paths(curr_uid, &paths) {
-                            Some(uid) => {
-                                curr_uid = uid;
-                                curr_instance = get_file_by_uid(curr_uid).unwrap();
-                                print_dir_config.offset = 0;
-                            },
-                            None => {
-                                print_dir_config.alert = format!("{buffer:?} file not found");
-                            },
+                        _ => if let Some(uid) = iterate_paths(curr_uid, &paths) {
+                            curr_uid = uid;
+                            curr_instance = get_file_by_uid(curr_uid).unwrap();
+                            print_dir_config.offset = 0;
+                        }
+
+                        else if let Some(uid) = search_by_prefix(curr_uid, &paths) {
+                            curr_uid = uid;
+                            curr_instance = get_file_by_uid(curr_uid).unwrap();
+                            print_dir_config.offset = 0;
+                        }
+
+                        else {
+                            print_dir_config.alert = format!("{buffer:?} file not found");
                         },
                     }
                 },

@@ -504,3 +504,35 @@ pub fn iterate_paths(start: Uid, paths: &[String]) -> Option<Uid> {  // TODO: Re
         }
     }
 }
+
+pub fn search_by_prefix(curr_file: Uid, paths: &[String]) -> Option<Uid> {  // TODO: Result<Uid, Error>
+    if paths.len() != 1 {
+        None
+    }
+
+    else {
+        let file_name = paths[0].to_ascii_lowercase();
+
+        if let Some(f) = get_file_by_uid(curr_file) {
+            let mut results = vec![];
+
+            for child in f.get_children(true) {
+                if child.name.to_ascii_lowercase().starts_with(&file_name) {
+                    results.push(child.uid);
+                }
+            }
+
+            if results.len() == 1 {
+                Some(results[0])
+            }
+
+            else {
+                None
+            }
+        }
+
+        else {
+            None
+        }
+    }
+}
