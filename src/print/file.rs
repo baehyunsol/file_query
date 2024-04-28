@@ -135,7 +135,9 @@ pub fn print_file(
                     vec![LineColor::All(colors::WHITE); 3],
                 ];
 
-                let syntax = if let Some(ext) = &f_i.file_ext {
+                let syntax = if let Some(ext) = &config.syntax_highlight {
+                    SYNTECT_SYNTAX_SET.find_syntax_by_extension(ext).unwrap_or_else(|| SYNTECT_SYNTAX_SET.find_syntax_plain_text())
+                } else if let Some(ext) = &f_i.file_ext {
                     SYNTECT_SYNTAX_SET.find_syntax_by_extension(ext).unwrap_or_else(|| SYNTECT_SYNTAX_SET.find_syntax_plain_text())
                 } else {
                     SYNTECT_SYNTAX_SET.find_syntax_plain_text()

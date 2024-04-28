@@ -101,7 +101,8 @@ fn main() {
                             curr_uid = Uid::BASE;
                             curr_instance = get_file_by_uid(curr_uid).unwrap();
                         },
-                        // TODO: duplicate code
+                        // FIXME: an error with file viewer -> try `;100` when there's less than 100 files
+                        // TODO: code is duplicated
                         Some(';') => match chars.get(1) {  // special commands
                             Some('j') => match chars.get(2) {
                                 Some('j') => match chars.get(3) {
@@ -120,11 +121,22 @@ fn main() {
                                     print_dir_config.offset += 1;
                                 },
                             },
-                            // TODO
                             Some('k') => match chars.get(2) {
-                                Some('k') => {},
-                                Some(c) if '0' <= *c && *c <= '9' => {},
-                                _ => {},
+                                Some('k') => match chars.get(3) {
+                                    Some('k') => {
+                                        print_dir_config.offset = print_dir_config.offset.max(100) - 100;
+                                    },
+                                    _ => {
+                                        print_dir_config.offset = print_dir_config.offset.max(10) - 10;
+                                    },
+                                },
+                                Some(c) if '0' <= *c && *c <= '9' => {
+                                    let n = parse_int_from(&chars[2..]) as usize;
+                                    print_dir_config.offset = print_dir_config.offset.max(n) - n;
+                                },
+                                _ => {
+                                    print_dir_config.offset = print_dir_config.offset.max(1) - 1;
+                                },
                             },
                             Some(c) if '0' <= *c && *c <= '9' => {
                                 let n = parse_int_from(&chars[1..]);
@@ -261,6 +273,23 @@ fn main() {
                                 print_file_config.offset = n as usize;
                             },
                         },
+                        Some('s') => match chars.get(1) {
+                            Some('e') => match chars.get(2) {
+                                Some('t') => match chars.get(3) {
+                                    Some(' ') => match parse_kw_args(&chars[3..]) {
+                                        Some((k, v)) => if k == "syntax" {
+                                            print_file_config.syntax_highlight = Some(v.to_string());
+                                        } else {
+                                            // todo: error
+                                        },
+                                        _ => {},
+                                    },
+                                    _ => {},
+                                },
+                                _ => {},
+                            },
+                            _ => {},
+                        }
                         Some(c) if '1' <= *c && *c <= '9' => {
                             let n = parse_int_from(&chars[0..]);
                             print_file_config.offset = n as usize;
@@ -330,9 +359,11 @@ fn main() {
                         print_file_config.offset = 0;
                         print_file_config.highlights = vec![];
                         print_file_config.read_mode = FileReadMode::default();
+                        print_file_config.syntax_highlight = None;
                     }
 
                     else {
+                        // TODO: it has to do the same thing to dir_config
                         if let Some(line_no) = previous_print_file_result.last_line {
                             if print_file_config.offset >= line_no {
                                 print_file_config.offset = line_no.max(1) - 1;
@@ -435,4 +466,39 @@ fn parse_hex_from(chars: &[char]) -> u64 {
     }
 
     result
+}
+
+// TODO: it has to be able to handle multiple args
+fn parse_kw_args(chars: &[char]) -> Option<(String, String)> {
+    // TODO: the implementation is too naive
+    let mut index = 0;
+    let mut key = vec![];
+
+    while chars[index] != '=' {
+        if chars[index] != ' ' {
+            key.push(chars[index]);
+        }
+
+        index += 1;
+
+        if index >= chars.len() {
+            return None;
+        }
+    }
+
+    index += 1;
+    let mut value = vec![];
+
+    while let Some(c) = chars.get(index) {
+        if *c != ' ' {
+            value.push(*c);
+        }
+
+        index += 1;
+    }
+
+    Some((
+        key.iter().collect(),
+        value.iter().collect(),
+    ))
 }

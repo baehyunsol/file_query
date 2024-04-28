@@ -162,6 +162,7 @@ pub struct PrintFileConfig {
     pub highlights: Vec<usize>,
 
     pub read_mode: FileReadMode,
+    pub syntax_highlight: Option<String>,  // name of extension
 }
 
 impl PrintFileConfig {
@@ -194,6 +195,7 @@ impl Default for PrintFileConfig {
             elapsed_timer: Instant::now(),
             highlights: vec![],
             read_mode: FileReadMode::Infer,
+            syntax_highlight: None,
         }
     }
 }
